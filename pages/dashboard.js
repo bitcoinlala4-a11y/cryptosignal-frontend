@@ -32,6 +32,9 @@ export default function Dashboard() {
   const [chartMarket, setChartMarket] = useState("BNB");
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("signals");
+  const [pancakePrediction, setPancakePrediction] = useState(null);
+  const [pancakeHistory, setPancakeHistory] = useState([]);
+  const [pancakeCountdown, setPancakeCountdown] = useState(null);
   const wsRef = useRef(null);
   const logsEndRef = useRef(null);
   const token = useRef(null);
@@ -113,7 +116,47 @@ export default function Dashboard() {
     const sigStatsData = await safeJson(sigStatsRes);
     if (sigData.signals) setSignals(sigData.signals);
     if (sigStatsData.byType) setSignalStats(sigStatsData);
+
+    // Charger prédiction PancakeSwap si Elite
+    if (planData.plan === "elite") {
+      loadPancake(t);
+    }
   }
+
+  async function loadPancake(t) {
+    const [predRes, histRes] = await Promise.all([
+      fetch(`${API}/api/pancake/prediction`, { headers: { Authorization: `Bearer ${t}` } }),
+      fetch(`${API}/api/pancake/history`, { headers: { Authorization: `Bearer ${t}` } }),
+    ]);
+    const predData = await safeJson(predRes);
+    const histData = await safeJson(histRes);
+    if (predData.prediction) {
+      setPancakePrediction(predData);
+      setPancakeCountdown(predData.secondsToNextRound);
+    }
+    if (histData.history) setPancakeHistory(histData.history);
+  }
+
+  // Countdown PancakeSwap
+  useEffect(() => {
+    if (pancakeCountdown === null) return;
+    if (pancakeCountdown <= 0) {
+      // Recharger la prédiction au nouveau round
+      if (token.current && userPlan === "elite") loadPancake(token.current);
+      return;
+    }
+    const timer = setTimeout(() => setPancakeCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [pancakeCountdown]);
+
+  // Rafraîchir la prédiction toutes les 60 secondes
+  useEffect(() => {
+    if (userPlan !== "elite") return;
+    const interval = setInterval(() => {
+      if (token.current) loadPancake(token.current);
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [userPlan]);
 
   function connectWS(t) {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -382,6 +425,11 @@ export default function Dashboard() {
                 <button style={activeTab === "signals" ? s.tabActive : s.tab} onClick={() => setActiveTab("signals")}>
                   Signaux ({signals.length})
                 </button>
+                {userPlan === "elite" && (
+                  <button style={activeTab === "pancake" ? s.tabActive : s.tab} onClick={() => setActiveTab("pancake")}>
+                    🥞 PancakeSwap
+                  </button>
+                )}
               </div>
 
               {activeTab === "logs" && (
@@ -498,6 +546,92 @@ export default function Dashboard() {
                         ))}
                       </tbody>
                     </table>
+                  )}
+                </div>
+              )}
+
+              {activeTab === "pancake" && userPlan === "elite" && (
+                <div style={{ padding: "8px 0" }}>
+                  {!pancakePrediction ? (
+                    <p style={{ color: "#666", fontSize: 13 }}>Chargement de la prédiction...</p>
+                  ) : (
+                    <>
+                      {/* Prédiction actuelle */}
+                      <div style={{ textAlign: "center", marginBottom: 24, padding: "20px", background: "#0f0f1a", borderRadius: 12 }}>
+                        <div style={{ fontSize: 12, color: "#666", marginBottom: 8 }}>PROCHAIN ROUND BNB</div>
+                        <div style={{ fontSize: 52, fontWeight: "bold", color: pancakePrediction.prediction === "BULL" ? "#34d399" : "#f87171", marginBottom: 8 }}>
+                          {pancakePrediction.prediction === "BULL" ? "▲ BULL" : "▼ BEAR"}
+                        </div>
+                        <div style={{ fontSize: 14, color: "#9ca3af", marginBottom: 16 }}>
+                          Confiance : <strong style={{ color: "#a78bfa" }}>{Math.round(pancakePrediction.confidence * 100)}%</strong>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "center", gap: 24, marginBottom: 16 }}>
+                          <div style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: 11, color: "#666" }}>BULL</div>
+                            <div style={{ fontSize: 18, fontWeight: "bold", color: "#34d399" }}>{Math.round(pancakePrediction.bullScore * 100)}%</div>
+                          </div>
+                          <div style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: 11, color: "#666" }}>BEAR</div>
+                            <div style={{ fontSize: 18, fontWeight: "bold", color: "#f87171" }}>{Math.round(pancakePrediction.bearScore * 100)}%</div>
+                          </div>
+                          <div style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: 11, color: "#666" }}>Prix BNB</div>
+                            <div style={{ fontSize: 18, fontWeight: "bold", color: "#fbbf24" }}>${parseFloat(pancakePrediction.price).toFixed(2)}</div>
+                          </div>
+                        </div>
+                        {/* Barre de force */}
+                        <div style={{ background: "#1a1a2e", borderRadius: 6, height: 8, overflow: "hidden", margin: "0 auto", maxWidth: 300 }}>
+                          <div style={{ width: `${Math.round(pancakePrediction.bullScore * 100)}%`, height: "100%", background: "linear-gradient(90deg, #34d399, #7c3aed)", borderRadius: 6 }} />
+                        </div>
+                        {/* Countdown */}
+                        {pancakeCountdown !== null && (
+                          <div style={{ marginTop: 16, fontSize: 13, color: "#555" }}>
+                            Prochain round dans{" "}
+                            <span style={{ color: pancakeCountdown < 60 ? "#f87171" : "#a78bfa", fontWeight: "bold", fontFamily: "monospace", fontSize: 16 }}>
+                              {String(Math.floor(pancakeCountdown / 60)).padStart(2, "0")}:{String(pancakeCountdown % 60).padStart(2, "0")}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Historique */}
+                      <div style={{ fontSize: 13, color: "#666", marginBottom: 8, display: "flex", justifyContent: "space-between" }}>
+                        <span>Historique des prédictions</span>
+                        {pancakeHistory.filter(h => h.result).length > 0 && (
+                          <span style={{ color: "#a78bfa" }}>
+                            Win rate : {((pancakeHistory.filter(h => h.result === "win").length / pancakeHistory.filter(h => h.result).length) * 100).toFixed(0)}%
+                          </span>
+                        )}
+                      </div>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                        <thead>
+                          <tr style={{ color: "#555" }}>
+                            <th style={s.th}>Heure</th>
+                            <th style={s.th}>Prédiction</th>
+                            <th style={s.th}>Confiance</th>
+                            <th style={s.th}>Prix entrée</th>
+                            <th style={s.th}>Prix clôture</th>
+                            <th style={s.th}>Résultat</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pancakeHistory.map((h, i) => (
+                            <tr key={i} style={{ borderBottom: "1px solid #1f1f35" }}>
+                              <td style={s.td}>{new Date(h.created_at).toLocaleTimeString("fr-FR")}</td>
+                              <td style={{ ...s.td, color: h.prediction === "BULL" ? "#34d399" : "#f87171", fontWeight: "bold" }}>
+                                {h.prediction === "BULL" ? "▲ BULL" : "▼ BEAR"}
+                              </td>
+                              <td style={s.td}>{Math.round(h.confidence * 100)}%</td>
+                              <td style={s.td}>{h.price_at_prediction ? `$${parseFloat(h.price_at_prediction).toFixed(2)}` : "—"}</td>
+                              <td style={s.td}>{h.price_at_close ? `$${parseFloat(h.price_at_close).toFixed(2)}` : "—"}</td>
+                              <td style={{ ...s.td, color: h.result === "win" ? "#34d399" : h.result === "loss" ? "#f87171" : "#555" }}>
+                                {h.result === "win" ? "✓ WIN" : h.result === "loss" ? "✗ LOSS" : "⏳ attente"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </>
                   )}
                 </div>
               )}
