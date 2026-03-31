@@ -143,7 +143,7 @@ export default function Home() {
     <>
       <Head>
         <title>CryptoSignal Pro — Signaux de trading crypto en temps réel</title>
-        <meta name="description" content="Signaux RSI, EMA, MACD et Momentum sur BTC, ETH, BNB et SOL. Win rate prouvé en temps réel. Alertes Telegram instantanées." />
+        <meta name="description" content="Signaux RSI, EMA, MACD et Momentum sur BTC, ETH, BNB et SOL. Analyse multi-timeframe en temps réel. Alertes Telegram instantanées." />
         <style>{`
           @keyframes float {
             0%, 100% { transform: translateY(0px) rotate(0deg); }
@@ -314,7 +314,7 @@ export default function Home() {
             <p style={{ textAlign: "center", color: "#555", fontSize: 14, margin: "0 0 36px" }}>Tout ce dont un trader a besoin, sans bruit</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 16 }}>
               {[
-                { icon: "🎯", title: "Win rate transparent", desc: "Chaque signal est évalué automatiquement. Aucune manipulation, les résultats sont visibles par tous.", color: "#34d399" },
+                { icon: "🎯", title: "Signaux évalués en direct", desc: "Chaque signal est évalué automatiquement à sa clôture. Aucune manipulation, les résultats sont visibles par tous.", color: "#34d399" },
                 { icon: "⚡", title: "Temps réel", desc: "Signaux générés toutes les minutes. Alertes Telegram instantanées dès qu'un signal dépasse 60% de confiance.", color: "#fbbf24" },
                 { icon: "📐", title: "SL / TP / R:R", desc: "Chaque signal calcule automatiquement le Stop-Loss et Take-Profit via ATR. Ratio risque/récompense affiché.", color: "#a78bfa" },
                 { icon: "🔥", title: "Volume Spike", desc: "Détection automatique des pics de volume anormaux. Indicateur 🔥 sur les signaux avec volume x2.", color: "#f97316" },
