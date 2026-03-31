@@ -290,9 +290,6 @@ export default function Dashboard() {
         </div>
 
         <div style={s.content}>
-          {/* Timer round */}
-          <RoundTimer market={chartMarket} />
-
           {/* Graphique prix */}
           <PriceChart market={chartMarket} onMarketChange={(m) => { setChartMarket(m); setConfig((c) => ({ ...c, market: m })); }} />
 
