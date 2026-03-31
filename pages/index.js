@@ -174,7 +174,7 @@ export default function Home() {
 
         {/* Footer */}
         <footer style={s.footer}>
-          <p>© 2026 CryptoSignal Pro — Le trading comporte des risques.</p>
+          <p>© 2026 CryptoSignal Pro</p>
           <div style={{ display: "flex", gap: 20, justifyContent: "center", marginTop: 8 }}>
             <span style={{ cursor: "pointer", color: "#555" }} onClick={() => router.push("/pricing")}>Tarifs</span>
             <span style={{ cursor: "pointer", color: "#555" }} onClick={() => { setMode("login"); setShowAuth(true); }}>Connexion</span>
