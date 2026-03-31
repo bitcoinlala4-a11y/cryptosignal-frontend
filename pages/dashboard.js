@@ -27,9 +27,11 @@ export default function Dashboard() {
   const [compareStats, setCompareStats] = useState({});
   const [signals, setSignals] = useState([]);
   const [signalStats, setSignalStats] = useState(null);
+  const [userPlan, setUserPlan] = useState("free");
+  const [showUpgrade, setShowUpgrade] = useState(false);
   const [chartMarket, setChartMarket] = useState("BNB");
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState("logs");
+  const [activeTab, setActiveTab] = useState("signals");
   const wsRef = useRef(null);
   const logsEndRef = useRef(null);
   const token = useRef(null);
@@ -97,9 +99,14 @@ export default function Dashboard() {
       setCompareStats(map);
     }
 
+    // Charger le plan utilisateur
+    const planRes = await fetch(`${API}/api/billing/plan`, { headers: { Authorization: `Bearer ${t}` } });
+    const planData = await safeJson(planRes);
+    if (planData.plan) setUserPlan(planData.plan);
+
     // Charger les signaux
     const [sigRes, sigStatsRes] = await Promise.all([
-      fetch(`${API}/api/signals?limit=50`),
+      fetch(`${API}/api/signals?limit=50`, { headers: { Authorization: `Bearer ${t}` } }),
       fetch(`${API}/api/signals/stats`),
     ]);
     const sigData = await safeJson(sigRes);
@@ -148,6 +155,10 @@ export default function Dashboard() {
   }
 
   async function toggleBot() {
+    if (userPlan === "free" && status !== "running") {
+      setShowUpgrade(true);
+      return;
+    }
     setLoading(true);
     const isCompare = config.strategy === "compare";
     if (status === "running") {
@@ -199,13 +210,38 @@ export default function Dashboard() {
     <>
       <Head><title>Dashboard — PancakeBot Pro</title></Head>
       <div style={s.page}>
+        {/* Popup upgrade */}
+        {showUpgrade && (
+          <div style={s.overlay}>
+            <div style={s.upgradeBox}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
+              <h2 style={{ margin: "0 0 8px", fontSize: 20 }}>Fonctionnalité Pro</h2>
+              <p style={{ color: "#9ca3af", fontSize: 14, margin: "0 0 24px", lineHeight: 1.6 }}>
+                Le lancement du bot est réservé aux abonnés Pro et Elite.<br />
+                Passez au plan Pro pour débloquer toutes les fonctionnalités.
+              </p>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button style={{ ...s.startBtn, background: "#7c3aed", width: "auto", padding: "11px 24px", marginTop: 0 }}
+                  onClick={() => router.push("/pricing")}>
+                  Voir les plans
+                </button>
+                <button style={{ ...s.logoutBtn }} onClick={() => setShowUpgrade(false)}>Fermer</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div style={s.header}>
-          <span style={s.headerTitle}>🥞 PancakeBot Pro</span>
+          <span style={s.headerTitle}>📈 CryptoSignal Pro</span>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ padding: "4px 12px", borderRadius: 20, fontSize: 11, fontWeight: "bold", background: userPlan === "free" ? "#1f2937" : userPlan === "pro" ? "#1f1535" : "#1a1200", color: userPlan === "free" ? "#6b7280" : userPlan === "pro" ? "#a78bfa" : "#f59e0b", border: `1px solid ${userPlan === "free" ? "#374151" : userPlan === "pro" ? "#7c3aed44" : "#f59e0b44"}` }}>
+              {userPlan === "free" ? "FREE" : userPlan === "pro" ? "⚡ PRO" : "👑 ELITE"}
+            </span>
             <span style={{ ...s.badge, background: status === "running" ? "#065f46" : "#1f2937", color: status === "running" ? "#34d399" : "#9ca3af" }}>
               {status === "running" ? "● EN COURS" : "● ARRÊTÉ"}
             </span>
+            <button style={s.logoutBtn} onClick={() => router.push("/pricing")}>Upgrade</button>
             <button style={s.logoutBtn} onClick={logout}>Déconnexion</button>
           </div>
         </div>
@@ -320,9 +356,16 @@ export default function Dashboard() {
                 </>
               )}
 
-              <button style={{ ...s.startBtn, background: status === "running" ? "#dc2626" : "#7c3aed" }} onClick={toggleBot} disabled={loading}>
-                {loading ? "..." : status === "running" ? "⏹ Arrêter le bot" : "▶ Démarrer le bot"}
+              <button style={{ ...s.startBtn, background: status === "running" ? "#dc2626" : userPlan === "free" ? "#374151" : "#7c3aed" }} onClick={toggleBot} disabled={loading}>
+                {loading ? "..." : status === "running" ? "⏹ Arrêter le bot" : userPlan === "free" ? "🔒 Réservé aux abonnés Pro" : "▶ Démarrer le bot"}
               </button>
+              {userPlan === "free" && (
+                <p style={{ color: "#f59e0b", fontSize: 12, textAlign: "center", margin: "8px 0 0" }}>
+                  <span style={{ cursor: "pointer", textDecoration: "underline" }} onClick={() => router.push("/pricing")}>
+                    Passer au Pro pour débloquer le bot →
+                  </span>
+                </p>
+              )}
 
               {status === "stopped" && (
                 <button style={s.resetBtn} onClick={resetStats}>Réinitialiser les stats</button>
@@ -574,4 +617,6 @@ const s = {
   logLine: { fontSize: 12, marginBottom: 4, lineHeight: 1.5 },
   th: { textAlign: "left", padding: "8px 6px", borderBottom: "1px solid #1f1f35" },
   td: { padding: "8px 6px", color: "#e5e7eb" },
+  overlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
+  upgradeBox: { background: "#1a1a2e", borderRadius: 16, padding: 40, maxWidth: 420, width: "90%", textAlign: "center", border: "1px solid #7c3aed44" },
 };
