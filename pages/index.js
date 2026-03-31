@@ -22,10 +22,13 @@ export default function Home() {
     const data = await res.json();
     setLoading(false);
     if (data.error) return setError(data.error);
-    localStorage.setItem("token", data.token);
+
     if (mode === "register") {
-      router.push("/pricing");
+      router.push(`/verify?email=${encodeURIComponent(form.email)}`);
+    } else if (data.needsVerification) {
+      router.push(`/verify?email=${encodeURIComponent(form.email)}`);
     } else {
+      localStorage.setItem("token", data.token);
       router.push("/dashboard");
     }
   }
