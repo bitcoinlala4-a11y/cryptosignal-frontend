@@ -23,7 +23,11 @@ export default function Home() {
     setLoading(false);
     if (data.error) return setError(data.error);
     localStorage.setItem("token", data.token);
-    router.push("/dashboard");
+    if (mode === "register") {
+      router.push("/pricing");
+    } else {
+      router.push("/dashboard");
+    }
   }
 
   return (
