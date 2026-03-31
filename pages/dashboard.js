@@ -11,6 +11,8 @@ const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:3001";
 export default function Dashboard() {
   const router = useRouter();
   const [userPlan, setUserPlan] = useState("free");
+  const [allowedTimeframes, setAllowedTimeframes] = useState(["1h"]);
+  const [selectedTimeframe, setSelectedTimeframe] = useState("1h");
   const [signals, setSignals] = useState([]);
   const [signalStats, setSignalStats] = useState(null);
   const [activeTab, setActiveTab] = useState("signals");
@@ -50,9 +52,20 @@ export default function Dashboard() {
     const sigStatsData = await safeJson(sigStatsRes);
     if (sigData.signals) setSignals(sigData.signals);
     if (sigStatsData.byType) setSignalStats(sigStatsData);
+    if (sigData.limits?.timeframes) {
+      setAllowedTimeframes(sigData.limits.timeframes);
+      setSelectedTimeframe(sigData.limits.timeframes[0]);
+    }
 
     // Pancake si Elite
     if (plan === "elite") loadPancake(t);
+  }
+
+  async function loadSignalsByTimeframe(tf) {
+    setSelectedTimeframe(tf);
+    const res = await fetch(`${API}/api/signals?limit=100&timeframe=${tf}`, { headers: { Authorization: `Bearer ${token.current}` } });
+    const data = await safeJson(res);
+    if (data.signals) setSignals(data.signals);
   }
 
   async function loadPancake(t) {
@@ -167,6 +180,25 @@ export default function Dashboard() {
             {/* Onglet Signaux */}
             {activeTab === "signals" && (
               <div>
+                {/* Sélecteur timeframe */}
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+                  {allowedTimeframes.map(tf => (
+                    <button key={tf} onClick={() => loadSignalsByTimeframe(tf)}
+                      style={{ padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 13, fontWeight: selectedTimeframe === tf ? "bold" : "normal",
+                        background: selectedTimeframe === tf ? "#7c3aed" : "#0f0f1a",
+                        color: selectedTimeframe === tf ? "#fff" : "#666" }}>
+                      {tf}
+                    </button>
+                  ))}
+                  {userPlan === "free" && (
+                    <span style={{ fontSize: 12, color: "#555", alignSelf: "center", marginLeft: 8 }}>
+                      <span style={{ color: "#7c3aed", cursor: "pointer" }} onClick={() => router.push("/pricing")}>
+                        Passer au Pro pour accéder à 5m, 15m, 30m, 2h, 4h →
+                      </span>
+                    </span>
+                  )}
+                </div>
+
                 {/* Stats par indicateur */}
                 {signalStats?.byType?.length > 0 && (
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
@@ -206,6 +238,7 @@ export default function Dashboard() {
                         <tr style={{ color: "#555" }}>
                           <th style={s.th}>Heure</th>
                           <th style={s.th}>Paire</th>
+                          <th style={s.th}>TF</th>
                           <th style={s.th}>Signal</th>
                           <th style={s.th}>Direction</th>
                           <th style={s.th}>Confiance</th>
@@ -219,6 +252,7 @@ export default function Dashboard() {
                           <tr key={sig.id || i} style={{ borderBottom: "1px solid #1f1f35" }}>
                             <td style={s.td}>{new Date(sig.created_at || sig.createdAt).toLocaleTimeString("fr-FR")}</td>
                             <td style={{ ...s.td, fontWeight: "bold", color: "#a78bfa" }}>{sig.pair?.replace("USDT", "")}</td>
+                            <td style={{ ...s.td, color: "#555", fontSize: 11 }}>{sig.timeframe || "5m"}</td>
                             <td style={{ ...s.td, color: "#9ca3af" }}>{(sig.type || "").toUpperCase()}</td>
                             <td style={{ ...s.td, color: sig.direction === "long" ? "#34d399" : "#f87171", fontWeight: "bold" }}>
                               {sig.direction === "long" ? "▲ LONG" : "▼ SHORT"}
