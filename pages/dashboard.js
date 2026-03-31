@@ -26,6 +26,16 @@ export default function Dashboard() {
   const [pancakePrediction, setPancakePrediction] = useState(null);
   const [pancakeHistory, setPancakeHistory] = useState([]);
   const [pancakeCountdown, setPancakeCountdown] = useState(null);
+
+  // ── Bot ──────────────────────────────────────────────────────────────────
+  const [botStatus, setBotStatus] = useState("stopped");
+  const [botStats, setBotStats] = useState(null);
+  const [botHistory, setBotHistory] = useState([]);
+  const [botLogs, setBotLogs] = useState([]);
+  const [botDecision, setBotDecision] = useState(null);
+  const [botForm, setBotForm] = useState({ strategy: "auto", betPercentage: "10", initialBalance: "100", market: "BNB", dryRun: true, maxLoss: "0.5", betAmount: "0.01" });
+  const logsEndRef = useRef(null);
+
   const wsRef = useRef(null);
   const token = useRef(null);
 
@@ -49,6 +59,8 @@ export default function Dashboard() {
     const plan = planData.plan || "free";
     setUserPlan(plan);
 
+    loadBot(t);
+
     const promises = [
       fetch(`${API}/api/market/overview`).then(r => r.json()).catch(() => ({})),
       fetch(`${API}/api/market/signal-of-day`).then(r => r.json()).catch(() => ({})),
@@ -66,6 +78,52 @@ export default function Dashboard() {
     if (sigData?.limits?.timeframes) { setAllowedTimeframes(sigData.limits.timeframes); setSelectedTimeframe(sigData.limits.timeframes[0]); }
     if (sigStatsData?.byType) setSignalStats(sigStatsData);
     if (matrixData?.matrix) { setMatrix(matrixData.matrix); setMatrixTimeframes(matrixData.timeframes || []); }
+  }
+
+  async function loadBot(t) {
+    try {
+      const [statusRes, histRes, decRes] = await Promise.all([
+        fetch(`${API}/api/bot/status`,   { headers: { Authorization: `Bearer ${t}` } }),
+        fetch(`${API}/api/bot/history`,  { headers: { Authorization: `Bearer ${t}` } }),
+        fetch(`${API}/api/bot/decision`, { headers: { Authorization: `Bearer ${t}` } }),
+      ]);
+      const statusData = await statusRes.json().catch(() => ({}));
+      const histData   = await histRes.json().catch(() => ({}));
+      const decData    = await decRes.json().catch(() => ({}));
+      if (statusData.status) setBotStatus(statusData.status);
+      if (statusData.stats)  setBotStats(statusData.stats);
+      if (histData.trades)   setBotHistory(histData.trades);
+      if (decData.decision)  setBotDecision(decData.decision);
+    } catch {}
+  }
+
+  async function startBot() {
+    const res = await fetch(`${API}/api/bot/start`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token.current}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        strategy:       botForm.strategy,
+        betPercentage:  parseFloat(botForm.betPercentage),
+        initialBalance: parseFloat(botForm.initialBalance),
+        market:         botForm.market,
+        dryRun:         botForm.dryRun,
+        maxLoss:        parseFloat(botForm.maxLoss),
+        betAmount:      botForm.betAmount,
+      }),
+    });
+    const data = await res.json();
+    if (data.success) { setBotStatus("running"); setBotLogs([]); }
+    else alert(data.error || "Erreur démarrage");
+  }
+
+  async function stopBot() {
+    await fetch(`${API}/api/bot/stop`, { method: "POST", headers: { Authorization: `Bearer ${token.current}` } });
+    setBotStatus("stopped");
+  }
+
+  async function resetBot() {
+    await fetch(`${API}/api/bot/reset`, { method: "POST", headers: { Authorization: `Bearer ${token.current}` } });
+    setBotStats(null); setBotHistory([]); setBotDecision(null); setBotLogs([]);
   }
 
   async function loadPancake(t) {
@@ -121,6 +179,11 @@ export default function Dashboard() {
         setSignals(prev => prev.map(s => s.id === msg.data.id ? { ...s, result: msg.data.result, pnl_pct: msg.data.pnlPct } : s));
         fetch(`${API}/api/signals/stats`).then(r => r.json()).then(d => { if (d.byType) setSignalStats(d); });
       }
+      if (msg.type === "status") setBotStatus(msg.data.status);
+      if (msg.type === "stats")  setBotStats(msg.data);
+      if (msg.type === "trade")  setBotHistory(prev => [msg.data, ...prev].slice(0, 50));
+      if (msg.type === "decision") setBotDecision(msg.data);
+      if (msg.type === "log") setBotLogs(prev => [msg.data, ...prev].slice(0, 100));
     };
     ws.onclose = () => setTimeout(() => connectWS(t), 3000);
   }
@@ -251,6 +314,7 @@ export default function Dashboard() {
                 { id: "signals", label: `⚡ Signaux (${signals.length})` },
                 ...(userPlan !== "free" ? [{ id: "matrix", label: "🔲 Matrice" }] : []),
                 ...(userPlan === "elite" ? [{ id: "pancake", label: "🥞 PancakeSwap" }] : []),
+                { id: "bot", label: `🤖 Bot${botStatus === "running" ? " ●" : ""}` },
               ].map(tab => (
                 <button key={tab.id} style={activeTab === tab.id ? s.tabActive : s.tab} onClick={() => setActiveTab(tab.id)}>
                   {tab.label}
@@ -499,6 +563,234 @@ export default function Dashboard() {
                 )}
               </div>
             )}
+            {/* ── BOT ─────────────────────────────────────────────────────── */}
+            {activeTab === "bot" && (
+              <div>
+
+                {/* Statut + contrôles */}
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 10, height: 10, borderRadius: "50%", background: botStatus === "running" ? "#34d399" : "#555", boxShadow: botStatus === "running" ? "0 0 8px #34d399" : "none" }} />
+                    <span style={{ fontWeight: "bold", color: botStatus === "running" ? "#34d399" : "#666", fontSize: 14 }}>
+                      {botStatus === "running" ? "EN COURS" : "ARRÊTÉ"}
+                    </span>
+                  </div>
+                  {botStatus === "stopped" ? (
+                    <button onClick={startBot} style={{ padding: "8px 20px", background: "#059669", border: "none", borderRadius: 6, color: "#fff", fontWeight: "bold", cursor: "pointer", fontSize: 13 }}>
+                      ▶ Démarrer
+                    </button>
+                  ) : (
+                    <button onClick={stopBot} style={{ padding: "8px 20px", background: "#dc2626", border: "none", borderRadius: 6, color: "#fff", fontWeight: "bold", cursor: "pointer", fontSize: 13 }}>
+                      ■ Arrêter
+                    </button>
+                  )}
+                  <button onClick={resetBot} style={{ padding: "8px 14px", background: "none", border: "1px solid #1f1f35", borderRadius: 6, color: "#555", cursor: "pointer", fontSize: 12 }}>
+                    ↺ Reset stats
+                  </button>
+                </div>
+
+                {/* Config (seulement si arrêté) */}
+                {botStatus === "stopped" && (
+                  <div style={{ background: "#0a0a1a", borderRadius: 10, padding: 16, marginBottom: 20, border: "1px solid #1f1f35" }}>
+                    <div style={{ fontSize: 11, color: "#555", marginBottom: 12, letterSpacing: 1 }}>CONFIGURATION</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
+                      {[
+                        { label: "Stratégie", key: "strategy", type: "select", options: ["auto","contrarian","momentum","rsi","martingale","random"] },
+                        { label: "Mise % balance", key: "betPercentage", type: "number", placeholder: "ex: 10" },
+                        { label: "Balance fictive ($)", key: "initialBalance", type: "number", placeholder: "ex: 100" },
+                        { label: "Marché", key: "market", type: "select", options: ["BNB"] },
+                        { label: "Stop-loss (BNB)", key: "maxLoss", type: "number", placeholder: "ex: 0.5" },
+                      ].map(field => (
+                        <div key={field.key}>
+                          <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>{field.label}</div>
+                          {field.type === "select" ? (
+                            <select value={botForm[field.key]} onChange={e => setBotForm(f => ({ ...f, [field.key]: e.target.value }))}
+                              style={{ width: "100%", background: "#111128", border: "1px solid #1f1f35", borderRadius: 6, color: "#fff", padding: "6px 8px", fontSize: 12 }}>
+                              {field.options.map(o => <option key={o} value={o}>{o}</option>)}
+                            </select>
+                          ) : (
+                            <input type="number" value={botForm[field.key]} onChange={e => setBotForm(f => ({ ...f, [field.key]: e.target.value }))}
+                              placeholder={field.placeholder}
+                              style={{ width: "100%", background: "#111128", border: "1px solid #1f1f35", borderRadius: 6, color: "#fff", padding: "6px 8px", fontSize: 12, boxSizing: "border-box" }} />
+                          )}
+                        </div>
+                      ))}
+                      <div>
+                        <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>Mode</div>
+                        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                          <input type="checkbox" checked={botForm.dryRun} onChange={e => setBotForm(f => ({ ...f, dryRun: e.target.checked }))} />
+                          <span style={{ fontSize: 12, color: "#9ca3af" }}>Simulation (dry-run)</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Stats du bot */}
+                {botStats && (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: 10, marginBottom: 20 }}>
+                    {[
+                      { label: "Mises", value: botStats.total_bets, color: "#a78bfa" },
+                      { label: "Victoires", value: botStats.wins, color: "#34d399" },
+                      { label: "Défaites", value: botStats.losses, color: "#f87171" },
+                      { label: "Win Rate", value: botStats.total_bets > 0 ? `${((botStats.wins / botStats.total_bets) * 100).toFixed(0)}%` : "—", color: botStats.wins >= botStats.losses ? "#34d399" : "#f87171" },
+                      { label: "Balance", value: botStats.virtual_balance > 0 ? `$${parseFloat(botStats.virtual_balance).toFixed(2)}` : "—", color: "#fbbf24" },
+                      { label: "Profit", value: botStats.total_won > 0 ? `+$${parseFloat(botStats.total_won).toFixed(2)}` : "—", color: "#34d399" },
+                      { label: "Perdu", value: botStats.total_lost > 0 ? `-$${parseFloat(botStats.total_lost).toFixed(2)}` : "—", color: "#f87171" },
+                    ].map(item => (
+                      <div key={item.label} style={{ background: "#0a0a1a", borderRadius: 8, padding: "10px 12px", border: "1px solid #1f1f35" }}>
+                        <div style={{ fontSize: 10, color: "#555", marginBottom: 3 }}>{item.label}</div>
+                        <div style={{ fontSize: 18, fontWeight: "bold", color: item.color }}>{item.value ?? "—"}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Intelligence Panel — Dernière décision */}
+                {botDecision && (
+                  <div style={{ background: "#0a0a1a", borderRadius: 10, padding: 16, marginBottom: 20, border: `1px solid ${botDecision.action === "BET_BULL" ? "#34d39944" : botDecision.action === "BET_BEAR" ? "#f8717144" : "#1f1f35"}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                      <span style={{ fontSize: 11, color: "#555", letterSpacing: 1 }}>DERNIÈRE DÉCISION — Round #{botDecision.epoch}</span>
+                      <span style={{ fontSize: 11, color: "#444" }}>{botDecision.timestamp ? new Date(botDecision.timestamp).toLocaleTimeString("fr-FR") : ""}</span>
+                    </div>
+
+                    {/* Action principale */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                      <div style={{ fontSize: 28, fontWeight: "bold", color: botDecision.action === "BET_BULL" ? "#34d399" : botDecision.action === "BET_BEAR" ? "#f87171" : "#555" }}>
+                        {botDecision.action === "BET_BULL" ? "▲ BULL" : botDecision.action === "BET_BEAR" ? "▼ BEAR" : "⏭ SKIP"}
+                      </div>
+                      {botDecision.confidence > 0 && (
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#555", marginBottom: 4 }}>
+                            <span>Confiance</span><span style={{ color: "#a78bfa", fontWeight: "bold" }}>{(botDecision.confidence * 100).toFixed(0)}%</span>
+                          </div>
+                          <div style={{ background: "#1a1a2e", borderRadius: 4, height: 6, overflow: "hidden" }}>
+                            <div style={{ width: `${botDecision.confidence * 100}%`, height: "100%", background: botDecision.confidence >= 0.7 ? "#34d399" : botDecision.confidence >= 0.55 ? "#fbbf24" : "#f87171", transition: "width 0.5s" }} />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Raison */}
+                    <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 14, padding: "8px 12px", background: "#111128", borderRadius: 6 }}>
+                      {botDecision.reason}
+                    </div>
+
+                    {/* Indicateurs */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 8, marginBottom: 14 }}>
+                      {[
+                        { label: "Tendance 15m", value: botDecision.indicators?.trend15m, type: "trend" },
+                        { label: "Tendance 5m",  value: botDecision.indicators?.trend5m,  type: "trend" },
+                        { label: "Tendance 1m",  value: botDecision.indicators?.trend1m,  type: "trend" },
+                        { label: "RSI (1m)", value: botDecision.indicators?.rsi !== null && botDecision.indicators?.rsi !== undefined ? botDecision.indicators.rsi.toFixed(0) : null, type: "rsi" },
+                        { label: "Pool BULL %", value: botDecision.indicators?.poolBullRatio !== null && botDecision.indicators?.poolBullRatio !== undefined ? `${(botDecision.indicators.poolBullRatio * 100).toFixed(0)}%` : null, type: "plain" },
+                        { label: "P&L journalier", value: botDecision.indicators?.dailyPnlPct !== undefined ? `${botDecision.indicators.dailyPnlPct >= 0 ? "+" : ""}${botDecision.indicators.dailyPnlPct.toFixed(1)}%` : null, type: "pnl", raw: botDecision.indicators?.dailyPnlPct },
+                        { label: "Pertes conséc.", value: botDecision.indicators?.consecutiveLosses ?? 0, type: "losses" },
+                        { label: "Vol. spike", value: botDecision.indicators?.volumeSpike ? "OUI ⚠️" : "Non", type: "plain" },
+                      ].map(item => {
+                        if (item.value === null || item.value === undefined) return null;
+                        let color = "#9ca3af";
+                        if (item.type === "trend") color = item.value === "bull" ? "#34d399" : item.value === "bear" ? "#f87171" : "#555";
+                        if (item.type === "rsi") { const r = parseFloat(item.value); color = r < 35 ? "#34d399" : r > 65 ? "#f87171" : "#9ca3af"; }
+                        if (item.type === "pnl") color = item.raw >= 0 ? "#34d399" : "#f87171";
+                        if (item.type === "losses") color = item.value >= 3 ? "#f87171" : item.value > 0 ? "#fbbf24" : "#34d399";
+                        const display = item.type === "trend" ? (item.value === "bull" ? "▲ HAUSSIÈRE" : item.value === "bear" ? "▼ BAISSIÈRE" : "— NEUTRE") : item.value;
+                        return (
+                          <div key={item.label} style={{ background: "#111128", borderRadius: 6, padding: "8px 10px" }}>
+                            <div style={{ fontSize: 10, color: "#444", marginBottom: 3 }}>{item.label}</div>
+                            <div style={{ fontSize: 13, fontWeight: "bold", color }}>{display}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Signaux actifs */}
+                    {botDecision.signals?.length > 0 && (
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ fontSize: 10, color: "#444", marginBottom: 8 }}>SIGNAUX ACTIFS</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {botDecision.signals.map((s, i) => (
+                            <div key={i} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11, background: s.direction === "bull" ? "#0d2818" : "#2a0f0f", color: s.direction === "bull" ? "#34d399" : "#f87171", border: `1px solid ${s.direction === "bull" ? "#34d39933" : "#f8717133"}` }}>
+                              <span style={{ fontWeight: "bold" }}>{s.name}</span>
+                              <span style={{ opacity: 0.7, marginLeft: 4 }}>{s.direction === "bull" ? "▲" : "▼"}</span>
+                              {s.detail && <span style={{ opacity: 0.5, marginLeft: 4, fontSize: 10 }}>{s.detail}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Alertes */}
+                    {botDecision.warnings?.length > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        {botDecision.warnings.map((w, i) => (
+                          <div key={i} style={{ fontSize: 11, color: "#fbbf24", background: "#1a1500", borderRadius: 6, padding: "6px 10px", border: "1px solid #fbbf2422" }}>
+                            ⚠️ {w}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Logs en temps réel */}
+                {botLogs.length > 0 && (
+                  <div style={{ background: "#050508", borderRadius: 10, padding: 14, marginBottom: 20, border: "1px solid #1f1f35", maxHeight: 220, overflowY: "auto" }}>
+                    <div style={{ fontSize: 11, color: "#555", marginBottom: 10, letterSpacing: 1 }}>LOGS EN TEMPS RÉEL</div>
+                    {botLogs.map((log, i) => (
+                      <div key={i} style={{ fontSize: 11, fontFamily: "monospace", marginBottom: 3, color: log.level === "success" ? "#34d399" : log.level === "loss" ? "#f87171" : log.level === "error" ? "#f87171" : log.level === "warn" ? "#fbbf24" : "#555" }}>
+                        <span style={{ color: "#333", marginRight: 8 }}>{log.time ? new Date(log.time).toLocaleTimeString("fr-FR") : ""}</span>
+                        {log.message}
+                      </div>
+                    ))}
+                    <div ref={logsEndRef} />
+                  </div>
+                )}
+
+                {/* Historique des trades */}
+                {botHistory.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 11, color: "#555", marginBottom: 10, letterSpacing: 1 }}>HISTORIQUE DES TRADES</div>
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                        <thead>
+                          <tr style={{ borderBottom: "1px solid #1f1f35" }}>
+                            {["Epoch", "Direction", "Mise", "Résultat", "P&L", "Balance après"].map(h => <th key={h} style={s.th}>{h}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {botHistory.slice(0, 30).map((t, i) => (
+                            <tr key={i} style={{ borderBottom: "1px solid #151525" }}>
+                              <td style={{ ...s.td, color: "#444" }}>#{t.epoch}</td>
+                              <td style={{ ...s.td, fontWeight: "bold", color: t.direction === "bull" ? "#34d399" : "#f87171" }}>{t.direction === "bull" ? "▲ BULL" : "▼ BEAR"}</td>
+                              <td style={{ ...s.td, fontFamily: "monospace" }}>${parseFloat(t.amount || 0).toFixed(2)}</td>
+                              <td style={s.td}>
+                                <span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: "bold", background: t.result === "win" ? "#0d2818" : "#2a0f0f", color: t.result === "win" ? "#34d399" : "#f87171" }}>
+                                  {t.result === "win" ? "✓ WIN" : "✗ LOSS"}
+                                </span>
+                              </td>
+                              <td style={{ ...s.td, fontWeight: "bold", color: parseFloat(t.profit || 0) >= 0 ? "#34d399" : "#f87171" }}>
+                                {parseFloat(t.profit || 0) >= 0 ? "+" : ""}{parseFloat(t.profit || 0).toFixed(2)}
+                              </td>
+                              <td style={{ ...s.td, fontFamily: "monospace", color: "#9ca3af" }}>{t.balance_after > 0 ? `$${parseFloat(t.balance_after).toFixed(2)}` : "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {botStatus === "stopped" && !botStats && (
+                  <div style={{ textAlign: "center", padding: "40px 0", color: "#444" }}>
+                    <div style={{ fontSize: 40, marginBottom: 10 }}>🤖</div>
+                    <div style={{ fontSize: 14 }}>Configure le bot et clique sur Démarrer</div>
+                    <div style={{ fontSize: 12, marginTop: 6, color: "#333" }}>Mode simulation recommandé pour commencer</div>
+                  </div>
+                )}
+              </div>
+            )}
+
           </div>
         </div>
       </div>
