@@ -199,6 +199,13 @@ export default function Home() {
                 <button style={s.button} type="submit" disabled={loading}>
                   {loading ? "Chargement..." : mode === "login" ? "Se connecter" : "Créer un compte"}
                 </button>
+                {mode === "login" && (
+                  <p style={{ textAlign: "center", margin: 0 }}>
+                    <span style={{ color: "#7c3aed", fontSize: 13, cursor: "pointer" }} onClick={() => router.push("/forgot-password")}>
+                      Mot de passe oublié ?
+                    </span>
+                  </p>
+                )}
               </form>
             </div>
           </div>
