@@ -158,7 +158,7 @@ export default function Admin() {
             </div>
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 11, color: "#555", marginBottom: 4 }}>Durée (mois)</div>
-              <input type="number" value={planForm.months} onChange={e => setPlanForm(p => ({ ...p, months: parseInt(e.target.value) || 1 })} min={1} max={24}
+              <input type="number" value={planForm.months} onChange={e => setPlanForm(p => ({ ...p, months: parseInt(e.target.value) || 1 }))} min={1} max={24}
                 style={{ width: "100%", background: "#111128", border: "1px solid #1f1f35", borderRadius: 6, color: "#fff", padding: "8px 10px", fontSize: 13, boxSizing: "border-box" }} />
             </div>
             <div style={{ display: "flex", gap: 8 }}>
