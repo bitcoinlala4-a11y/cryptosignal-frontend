@@ -49,6 +49,7 @@ export default function Dashboard() {
   const [keyInput, setKeyInput] = useState("");
   const [keyMsg, setKeyMsg] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [darkMode, setDarkMode] = useState(true);
 
   const wsRef = useRef(null);
   const token = useRef(null);
@@ -61,6 +62,8 @@ export default function Dashboard() {
     const onResize = () => setIsMobile(window.innerWidth < 768);
     onResize();
     window.addEventListener("resize", onResize);
+    const saved = localStorage.getItem("darkMode");
+    if (saved === "false") { setDarkMode(false); document.body.classList.add("light"); }
     return () => { wsRef.current?.close(); wsRef.current = null; window.removeEventListener("resize", onResize); };
   }, []);
 
@@ -259,10 +262,10 @@ export default function Dashboard() {
   return (
     <>
       <Head><title>Dashboard — CryptoSignal Pro</title></Head>
-      <div style={s.page}>
+      <div style={s.page} className="dash-page">
 
         {/* Header */}
-        <div style={s.header}>
+        <div style={s.header} className="dash-header">
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             <span style={s.logo}>📈 CryptoSignal Pro</span>
             <span style={{ ...s.planBadge, background: userPlan === "free" ? "#1f2937" : userPlan === "pro" ? "#1f1535" : "#1a1200", color: userPlan === "free" ? "#6b7280" : userPlan === "pro" ? "#a78bfa" : "#f59e0b", border: `1px solid ${userPlan === "free" ? "#374151" : userPlan === "pro" ? "#7c3aed55" : "#f59e0b55"}` }}>
@@ -270,6 +273,10 @@ export default function Dashboard() {
             </span>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => { const next = !darkMode; setDarkMode(next); localStorage.setItem("darkMode", String(next)); document.body.classList.toggle("light", !next); }}
+              style={{ padding: "7px 12px", background: "none", border: "1px solid #1f1f35", borderRadius: 6, color: "#555", cursor: "pointer", fontSize: 14 }}>
+              {darkMode ? "☀️" : "🌙"}
+            </button>
             {userPlan !== "elite" && <button style={s.upgradeBtn} onClick={() => router.push("/pricing")}>⬆ Upgrade</button>}
             <button style={s.logoutBtn} onClick={logout}>Déconnexion</button>
           </div>
@@ -303,10 +310,10 @@ export default function Dashboard() {
           )}
 
           {/* Ligne du haut : F&G + stats paires */}
-          <div style={s.topRow}>
+          <div style={s.topRow} className="dash-toprow">
             {/* Fear & Greed */}
             {fearGreed && (
-              <div style={s.fgBox}>
+              <div style={s.fgBox} className="dash-fg-box dash-card">
                 <div style={{ fontSize: 10, color: "#555", letterSpacing: 1, marginBottom: 6 }}>FEAR & GREED</div>
                 <div style={{ fontSize: 40, fontWeight: "bold", color: fearGreed.value >= 60 ? "#34d399" : fearGreed.value >= 40 ? "#fbbf24" : "#f87171", lineHeight: 1 }}>
                   {fearGreed.value}
@@ -319,7 +326,7 @@ export default function Dashboard() {
             )}
 
             {/* Paires overview */}
-            <div style={s.pairsGrid}>
+            <div style={s.pairsGrid} className="dash-pairs-grid">
               {overview.map(item => (
                 <div key={item.pair} style={s.pairCard}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
@@ -356,7 +363,7 @@ export default function Dashboard() {
           </div>
 
           {/* Win rate global */}
-          <div style={s.statsBar}>
+          <div style={s.statsBar} className="dash-stats-bar">
             <div style={s.statItem}><span style={{ color: "#34d399", fontWeight: "bold", fontSize: 20 }}>{winRate ? `${winRate}%` : "—"}</span><span style={{ color: "#555", fontSize: 11 }}>Win Rate</span></div>
             <div style={s.statDivider} />
             <div style={s.statItem}><span style={{ color: "#a78bfa", fontWeight: "bold", fontSize: 20 }}>{overall?.total || "—"}</span><span style={{ color: "#555", fontSize: 11 }}>Signaux évalués</span></div>
@@ -370,8 +377,8 @@ export default function Dashboard() {
           <AllCharts />
 
           {/* Panel onglets */}
-          <div style={s.panel}>
-            <div style={s.tabBar}>
+          <div style={s.panel} className="dash-panel">
+            <div style={s.tabBar} className="dash-tabbar">
               {[
                 { id: "overview", label: "📊 Vue d'ensemble" },
                 { id: "signals", label: `⚡ Signaux (${signals.length})` },
@@ -810,6 +817,47 @@ export default function Dashboard() {
                     <div ref={logsEndRef} />
                   </div>
                 )}
+
+                {/* Graphique balance lissé */}
+                {botHistory.length > 1 && (() => {
+                  const pts = [...botHistory].reverse().map(t => parseFloat(t.balance_after || 0)).filter(v => v > 0);
+                  if (pts.length < 2) return null;
+                  const W = 500, H = 80, pad = 8;
+                  const min = Math.min(...pts), max = Math.max(...pts);
+                  const range = max - min || 1;
+                  const coords = pts.map((v, i) => ({
+                    x: pad + (i / (pts.length - 1)) * (W - 2 * pad),
+                    y: H - pad - ((v - min) / range) * (H - 2 * pad),
+                  }));
+                  const smooth = coords.map((p, i) => {
+                    if (i === 0) return `M ${p.x},${p.y}`;
+                    const prev = coords[i - 1];
+                    const cx = (prev.x + p.x) / 2;
+                    return `C ${cx},${prev.y} ${cx},${p.y} ${p.x},${p.y}`;
+                  }).join(" ");
+                  const fill = `${smooth} L ${coords[coords.length-1].x},${H} L ${coords[0].x},${H} Z`;
+                  const last = pts[pts.length - 1], first = pts[0];
+                  const color = last >= first ? "#34d399" : "#f87171";
+                  return (
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#555", marginBottom: 6 }}>
+                        <span>COURBE DE BALANCE</span>
+                        <span style={{ color, fontWeight: "bold" }}>{last >= first ? "+" : ""}{((last - first) / first * 100).toFixed(1)}%</span>
+                      </div>
+                      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 80, display: "block" }}>
+                        <defs>
+                          <linearGradient id="balGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+                            <stop offset="100%" stopColor={color} stopOpacity="0" />
+                          </linearGradient>
+                        </defs>
+                        <path d={fill} fill="url(#balGrad)" />
+                        <path d={smooth} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" />
+                        <circle cx={coords[coords.length-1].x} cy={coords[coords.length-1].y} r="3" fill={color} />
+                      </svg>
+                    </div>
+                  );
+                })()}
 
                 {/* Historique des trades */}
                 {botHistory.length > 0 && (

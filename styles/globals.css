@@ -135,3 +135,34 @@ a { color: inherit; text-decoration: none; }
   h1 { font-size: 24px !important; }
   nav button:first-of-type { display: none; }
 }
+
+/* ── Dashboard responsive ────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .dash-header { padding: 10px 12px !important; flex-wrap: wrap; gap: 8px; }
+  .dash-content { padding: 10px 12px !important; }
+  .dash-toprow { flex-direction: column !important; }
+  .dash-pairs-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .dash-stats-bar { overflow-x: auto; gap: 0; padding: 10px 12px !important; }
+  .dash-stat-item { min-width: 80px; }
+  .dash-tabbar { overflow-x: auto; flex-wrap: nowrap !important; padding-bottom: 8px; }
+  .dash-tabbar button { white-space: nowrap; font-size: 11px !important; padding: 6px 10px !important; }
+  .dash-panel { padding: 12px !important; }
+  .dash-bot-config { grid-template-columns: 1fr 1fr !important; }
+  .dash-bot-stats { grid-template-columns: repeat(3, 1fr) !important; }
+  .dash-fg-box { display: none; }
+}
+
+/* ── Mode clair ──────────────────────────────────────────────────── */
+body.light { background: #f0f4f8 !important; color: #1a1a2e !important; }
+body.light .dash-page { background: #f0f4f8 !important; }
+body.light .dash-header { background: #ffffff !important; border-bottom-color: #e2e8f0 !important; }
+body.light .dash-card { background: #ffffff !important; border-color: #e2e8f0 !important; }
+body.light .dash-inner { background: #f8fafc !important; border-color: #e2e8f0 !important; }
+body.light .dash-panel { background: #ffffff !important; border-color: #e2e8f0 !important; }
+body.light .dash-stats-bar { background: #ffffff !important; border-color: #e2e8f0 !important; }
+body.light .dash-pair-card { background: #ffffff !important; border-color: #e2e8f0 !important; }
+body.light .dash-sod { background: #f8fafc !important; border-color: #e2e8f0 !important; }
+body.light input, body.light select { background: #f1f5f9 !important; border-color: #cbd5e1 !important; color: #1a1a2e !important; }
+body.light table tr:hover td { background: #f1f5f9 !important; }
+body.light .text-dim { color: #94a3b8 !important; }
+body.light .text-muted { color: #64748b !important; }
