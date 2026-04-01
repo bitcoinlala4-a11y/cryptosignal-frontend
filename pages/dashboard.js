@@ -57,14 +57,17 @@ export default function Dashboard() {
   const [polyScannedAt, setPolyScannedAt] = useState(null);
   const [polyScanning, setPolyScanning] = useState(false);
 
-  // ── Simulateur ───────────────────────────────────────────────────────────
-  const [simBalance, setSimBalance] = useState(1000);
-  const [simCanReset, setSimCanReset] = useState(true);
-  const [simTrades, setSimTrades] = useState([]);
-  const [simStats, setSimStats] = useState(null);
-  const [simForm, setSimForm] = useState({ pair: "BTCUSDT", direction: "LONG", amount: "50" });
-  const [simMsg, setSimMsg] = useState(null);
-  const [simLoading, setSimLoading] = useState(false);
+  // ── Trading Lab (fusion Bot + Simulateur) ────────────────────────────────
+  const [labMode, setLabMode] = useState("manual");      // "manual" | "auto"
+  const [labBalance, setLabBalance] = useState(1000);
+  const [labCanReset, setLabCanReset] = useState(true);
+  const [labSignals, setLabSignals] = useState({});       // { BTCUSDT: { direction, confidence, type } }
+  const [labPending, setLabPending] = useState([]);
+  const [labHistory, setLabHistory] = useState([]);
+  const [labBalHistory, setLabBalHistory] = useState([]);
+  const [labForm, setLabForm] = useState({ pair: "BTCUSDT", direction: "LONG", amount: "50" });
+  const [labMsg, setLabMsg] = useState(null);
+  const [labLoading, setLabLoading] = useState(false);
 
   const wsRef = useRef(null);
   const token = useRef(null);
@@ -118,7 +121,7 @@ export default function Dashboard() {
     fetch(`${API}/api/market/whales`).then(r => r.json()).then(d => { if (d.whales) setWhales(d.whales); }).catch(() => {});
     fetch(`${API}/api/market/news`).then(r => r.json()).then(d => { if (d.news) setNews(d.news); }).catch(() => {});
     loadPolymarket(t);
-    loadSimulator(t);
+    loadLab(t);
   }
 
   async function loadPolymarket(t) {
@@ -131,51 +134,65 @@ export default function Dashboard() {
     } catch {}
   }
 
-  async function loadSimulator(t) {
+  async function loadLab(t) {
     try {
-      const [balRes, histRes] = await Promise.all([
-        fetch(`${API}/api/simulator/balance`, { headers: { Authorization: `Bearer ${t}` } }),
-        fetch(`${API}/api/simulator/history`, { headers: { Authorization: `Bearer ${t}` } }),
+      const [stateRes, histRes] = await Promise.all([
+        fetch(`${API}/api/lab/state`,   { headers: { Authorization: `Bearer ${t}` } }),
+        fetch(`${API}/api/lab/history`, { headers: { Authorization: `Bearer ${t}` } }),
       ]);
-      const bal  = await balRes.json().catch(() => ({}));
-      const hist = await histRes.json().catch(() => ({}));
-      if (bal.balance  != null) setSimBalance(bal.balance);
-      if (bal.canReset != null) setSimCanReset(bal.canReset);
-      if (hist.trades)          setSimTrades(hist.trades);
-      if (hist.stats)           setSimStats(hist.stats);
+      const state = await stateRes.json().catch(() => ({}));
+      const hist  = await histRes.json().catch(() => ({}));
+      if (state.balance    != null) setLabBalance(state.balance);
+      if (state.canReset   != null) setLabCanReset(state.canReset);
+      if (state.signals)            setLabSignals(state.signals);
+      if (state.pendingTrades)      setLabPending(state.pendingTrades);
+      if (state.botStatus)          setBotStatus(state.botStatus);
+      if (hist.trades)              setLabHistory(hist.trades);
+      if (hist.balanceHistory)      setLabBalHistory(hist.balanceHistory);
+      if (hist.stats)               setBotStats(hist.stats);
     } catch {}
   }
 
-  async function placeTrade() {
-    if (simLoading) return;
-    setSimLoading(true);
-    setSimMsg(null);
+  async function labPlaceTrade() {
+    if (labLoading) return;
+    setLabLoading(true); setLabMsg(null);
     try {
-      const res = await fetch(`${API}/api/simulator/trade`, {
+      const res = await fetch(`${API}/api/lab/trade`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token.current}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ pair: simForm.pair, direction: simForm.direction, amount: parseFloat(simForm.amount) }),
+        body: JSON.stringify({ pair: labForm.pair, direction: labForm.direction, amount: parseFloat(labForm.amount) }),
       });
       const d = await res.json();
-      if (d.success) {
-        setSimBalance(d.newBalance);
-        setSimMsg({ ok: d.message });
-        loadSimulator(token.current);
-      } else {
-        setSimMsg({ error: d.error });
-      }
-    } catch { setSimMsg({ error: "Erreur réseau." }); }
-    setSimLoading(false);
-    setTimeout(() => setSimMsg(null), 6000);
+      if (d.success) { setLabBalance(d.newBalance); setLabMsg({ ok: d.message }); loadLab(token.current); }
+      else setLabMsg({ error: d.error });
+    } catch { setLabMsg({ error: "Erreur réseau." }); }
+    setLabLoading(false);
+    setTimeout(() => setLabMsg(null), 7000);
   }
 
-  async function resetSimulator() {
-    if (!window.confirm("Réinitialiser votre solde à $1 000 ? Cette action est unique et irréversible.")) return;
-    const res = await fetch(`${API}/api/simulator/reset`, { method: "POST", headers: { Authorization: `Bearer ${token.current}` } });
+  async function labStartBot() {
+    const res = await fetch(`${API}/api/lab/bot/start`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token.current}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ strategy: botForm.strategy, betPercentage: botForm.betPercentage, maxLoss: botForm.maxLoss, market: botForm.market, dryRun: true }),
+    });
     const d = await res.json();
-    if (d.success) { setSimBalance(1000); setSimCanReset(false); setSimMsg({ ok: d.message }); loadSimulator(token.current); }
-    else setSimMsg({ error: d.error });
-    setTimeout(() => setSimMsg(null), 6000);
+    if (d.success) { setBotStatus("running"); setBotLogs([]); }
+    else alert(d.error || "Erreur démarrage");
+  }
+
+  async function labStopBot() {
+    await fetch(`${API}/api/lab/bot/stop`, { method: "POST", headers: { Authorization: `Bearer ${token.current}` } });
+    setBotStatus("stopped");
+  }
+
+  async function labReset() {
+    if (!window.confirm("Réinitialiser votre solde Lab à $1 000 ? Action unique et irréversible.")) return;
+    const res = await fetch(`${API}/api/lab/reset`, { method: "POST", headers: { Authorization: `Bearer ${token.current}` } });
+    const d = await res.json();
+    if (d.success) { setLabBalance(1000); setLabCanReset(false); setLabMsg({ ok: "Solde réinitialisé à $1 000." }); loadLab(token.current); }
+    else setLabMsg({ error: d.error });
+    setTimeout(() => setLabMsg(null), 5000);
   }
 
   async function triggerPolyScan() {
@@ -350,7 +367,7 @@ export default function Dashboard() {
         fetch(`${API}/api/signals/stats`).then(r => r.json()).then(d => { if (d.byType) setSignalStats(d); });
       }
       if (msg.type === "status") setBotStatus(msg.data.status);
-      if (msg.type === "stats")  setBotStats(msg.data);
+      if (msg.type === "stats")  { setBotStats(msg.data); if (msg.data.virtualBalance != null) setLabBalance(msg.data.virtualBalance); }
       if (msg.type === "trade")  setBotHistory(prev => [msg.data, ...prev].slice(0, 50));
       if (msg.type === "decision") setBotDecision(msg.data);
       if (msg.type === "log") setBotLogs(prev => [msg.data, ...prev].slice(0, 100));
@@ -536,8 +553,7 @@ export default function Dashboard() {
                 ...(userPlan !== "free" ? [{ id: "matrix", label: "🔲 Matrice" }] : []),
                 ...(userPlan === "elite" ? [{ id: "pancake", label: "🥞 PancakeSwap" }] : []),
                 { id: "polymarket", label: `🎯 Polymarket${polyGaps.length > 0 ? ` (${polyGaps.length})` : ""}` },
-                { id: "simulator", label: `🎮 Simulateur ($${Math.round(simBalance)})` },
-                { id: "bot", label: `🤖 Bot${botStatus === "running" ? " ●" : ""}` },
+                { id: "lab", label: `🧪 Trading Lab ($${Math.round(labBalance)})${botStatus === "running" ? " ●" : ""}` },
                 { id: "profil", label: "👤 Profil" },
               ].map(tab => (
                 <button key={tab.id} style={activeTab === tab.id ? s.tabActive : s.tab} onClick={() => setActiveTab(tab.id)}>
@@ -863,9 +879,245 @@ export default function Dashboard() {
               </div>
             )}
             {/* ── BOT ─────────────────────────────────────────────────────── */}
-            {/* ── Onglet Simulateur ────────────────────────────────────────────── */}
-            {activeTab === "simulator" && (
+            {/* ── Trading Lab ──────────────────────────────────────────────────── */}
+            {activeTab === "lab" && (
               <div>
+                {/* ─ Solde | Stats | Mode switch ─ */}
+                <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+                  <div style={{ flex: "0 0 220px", background: "#0a0a18", border: "1px solid #1f1f35", borderRadius: 10, padding: "18px 20px" }}>
+                    <div style={{ fontSize: 10, color: "#555", letterSpacing: 1, marginBottom: 4 }}>SOLDE LAB</div>
+                    <div style={{ fontSize: 32, fontWeight: "bold", color: labBalance >= 1000 ? "#10b981" : labBalance >= 400 ? "#f59e0b" : "#ef4444" }}>${labBalance.toFixed(2)}</div>
+                    <div style={{ marginTop: 8, height: 5, background: "#1f1f35", borderRadius: 3, overflow: "hidden" }}>
+                      <div style={{ width: `${Math.min(100, Math.max(0, (labBalance / 1000) * 100))}%`, height: "100%", background: labBalance >= 1000 ? "#10b981" : labBalance >= 400 ? "#f59e0b" : "#ef4444", borderRadius: 3, transition: "width 0.5s" }} />
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#374151", marginTop: 3 }}><span>$0</span><span>$1 000</span></div>
+                    {labBalance <= 0 && labCanReset && <button onClick={labReset} style={{ marginTop: 10, width: "100%", padding: "7px", background: "#dc2626", border: "none", borderRadius: 6, color: "#fff", fontWeight: "bold", cursor: "pointer", fontSize: 12 }}>🔄 Reset (1 fois)</button>}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 200, background: "#0a0a18", border: "1px solid #1f1f35", borderRadius: 10, padding: "18px 20px" }}>
+                    <div style={{ fontSize: 10, color: "#555", letterSpacing: 1, marginBottom: 12 }}>STATISTIQUES GLOBALES</div>
+                    <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
+                      {[
+                        { label: "Trades",   value: botStats?.total_bets || 0,    color: "#9ca3af" },
+                        { label: "Wins",     value: botStats?.wins || 0,          color: "#34d399" },
+                        { label: "Losses",   value: botStats?.losses || 0,        color: "#f87171" },
+                        { label: "Win Rate", value: (botStats?.total_bets || 0) > 0 ? `${((botStats.wins / botStats.total_bets) * 100).toFixed(0)}%` : "—", color: (botStats?.wins || 0) >= (botStats?.losses || 0) ? "#34d399" : "#f87171" },
+                        { label: "Gains",    value: `+$${parseFloat(botStats?.total_won  || 0).toFixed(2)}`, color: "#34d399" },
+                        { label: "Pertes",   value: `-$${parseFloat(botStats?.total_lost || 0).toFixed(2)}`, color: "#f87171" },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: 20, fontWeight: "bold", color }}>{value}</div>
+                          <div style={{ fontSize: 10, color: "#555" }}>{label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, justifyContent: "center", minWidth: 140 }}>
+                    {[{ id: "manual", label: "🎮 Manuel" }, { id: "auto", label: `🤖 Auto${botStatus === "running" ? " ●" : ""}` }].map(m => (
+                      <button key={m.id} onClick={() => setLabMode(m.id)} style={{ padding: "12px 16px", background: labMode === m.id ? "#7c3aed" : "#1f1f35", border: `1px solid ${labMode === m.id ? "#7c3aed" : "#1f1f35"}`, borderRadius: 8, color: labMode === m.id ? "#fff" : "#555", fontWeight: "bold", fontSize: 13, cursor: "pointer" }}>{m.label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Courbe de balance */}
+                {labBalHistory.length > 1 && (() => {
+                  const pts = labBalHistory.map(h => parseFloat(h.balance)).filter(v => v > 0);
+                  if (pts.length < 2) return null;
+                  const W = 600, H = 70, pad = 6, min = Math.min(...pts), max = Math.max(...pts), rng = max - min || 1;
+                  const coords = pts.map((v, i) => ({ x: pad + (i / (pts.length - 1)) * (W - 2 * pad), y: H - pad - ((v - min) / rng) * (H - 2 * pad) }));
+                  const smooth = coords.map((p, i) => { if (i === 0) return `M ${p.x},${p.y}`; const pr = coords[i-1]; const cx = (pr.x + p.x) / 2; return `C ${cx},${pr.y} ${cx},${p.y} ${p.x},${p.y}`; }).join(" ");
+                  const fill = `${smooth} L ${coords[coords.length-1].x},${H} L ${coords[0].x},${H} Z`;
+                  const last = pts[pts.length-1], first = pts[0], color = last >= first ? "#34d399" : "#f87171";
+                  return (
+                    <div style={{ marginBottom: 20, background: "#050508", borderRadius: 8, padding: "12px 14px", border: "1px solid #1f1f35" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#555", marginBottom: 4 }}>
+                        <span>COURBE DE BALANCE</span>
+                        <span style={{ color, fontWeight: "bold" }}>{last >= first ? "+" : ""}{((last - first) / first * 100).toFixed(1)}%</span>
+                      </div>
+                      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 70, display: "block" }}>
+                        <defs><linearGradient id="labGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity="0.25"/><stop offset="100%" stopColor={color} stopOpacity="0"/></linearGradient></defs>
+                        <path d={fill} fill="url(#labGrad)" />
+                        <path d={smooth} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+                        <circle cx={coords[coords.length-1].x} cy={coords[coords.length-1].y} r="3" fill={color} />
+                      </svg>
+                    </div>
+                  );
+                })()}
+
+                {/* ── MODE MANUEL ── */}
+                {labMode === "manual" && (
+                  <div>
+                    {(() => {
+                      const sig = labSignals[labForm.pair];
+                      if (!sig) return null;
+                      const isLong = sig.direction === "long";
+                      const conf = Math.round((sig.confidence || 0) * 100);
+                      return (
+                        <div style={{ background: isLong ? "#052e16" : "#1a0000", border: `1px solid ${isLong ? "#34d39933" : "#f8717133"}`, borderRadius: 8, padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                          <div>
+                            <div style={{ fontSize: 10, color: "#555", letterSpacing: 1 }}>SIGNAL ALGO — {sig.type?.toUpperCase()} sur {labForm.pair.replace("USDT","")}</div>
+                            <div style={{ fontSize: 20, fontWeight: "bold", color: isLong ? "#34d399" : "#f87171", marginTop: 2 }}>{isLong ? "▲ LONG" : "▼ SHORT"}</div>
+                          </div>
+                          <div style={{ flex: 1, minWidth: 100 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#555", marginBottom: 3 }}><span>Confiance</span><span style={{ color: isLong ? "#34d399" : "#f87171", fontWeight: "bold" }}>{conf}%</span></div>
+                            <div style={{ background: "#1a1a2e", borderRadius: 3, height: 5, overflow: "hidden" }}><div style={{ width: `${conf}%`, height: "100%", background: isLong ? "#34d399" : "#f87171" }} /></div>
+                          </div>
+                          <span style={{ fontSize: 11, color: "#555" }}>{new Date(sig.created_at).toLocaleTimeString("fr-FR")}</span>
+                        </div>
+                      );
+                    })()}
+                    <div style={{ background: "#0a0a18", border: "1px solid #1f1f35", borderRadius: 10, padding: "18px 20px", marginBottom: 14 }}>
+                      <div style={{ fontSize: 10, color: "#555", letterSpacing: 1, marginBottom: 14 }}>PASSER UN ORDRE FICTIF</div>
+                      {botStatus === "running" && <div style={{ padding: "8px 12px", background: "#1a1200", border: "1px solid #f59e0b44", borderRadius: 6, fontSize: 12, color: "#f59e0b", marginBottom: 12 }}>⚠️ Bot Auto actif — arrêtez-le pour trader manuellement.</div>}
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          <label style={{ fontSize: 10, color: "#555" }}>Paire</label>
+                          <select value={labForm.pair} onChange={e => setLabForm(f => ({ ...f, pair: e.target.value }))} style={{ padding: "8px 12px", background: "#111", border: "1px solid #1f1f35", borderRadius: 6, color: "#e5e7eb", fontSize: 13 }}>
+                            {["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT"].map(p => <option key={p} value={p}>{p.replace("USDT","")}</option>)}
+                          </select>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          <label style={{ fontSize: 10, color: "#555" }}>Direction</label>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            {["LONG","SHORT"].map(d => <button key={d} onClick={() => setLabForm(f => ({ ...f, direction: d }))} style={{ padding: "8px 18px", border: "none", borderRadius: 6, fontWeight: "bold", fontSize: 13, cursor: "pointer", background: labForm.direction === d ? (d === "LONG" ? "#059669" : "#dc2626") : "#1f1f35", color: labForm.direction === d ? "#fff" : "#555" }}>{d === "LONG" ? "▲ LONG" : "▼ SHORT"}</button>)}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          <label style={{ fontSize: 10, color: "#555" }}>Mise ($)</label>
+                          <input type="number" min="1" value={labForm.amount} onChange={e => setLabForm(f => ({ ...f, amount: e.target.value }))} style={{ padding: "8px 12px", background: "#111", border: "1px solid #1f1f35", borderRadius: 6, color: "#e5e7eb", fontSize: 13, width: 90 }} />
+                        </div>
+                        <div style={{ display: "flex", gap: 4, alignItems: "flex-end" }}>
+                          {["10%","25%","50%","MAX"].map(p => <button key={p} onClick={() => setLabForm(f => ({ ...f, amount: p === "MAX" ? String(Math.floor(labBalance)) : String(Math.floor(labBalance * parseInt(p) / 100)) }))} style={{ padding: "8px 9px", background: "#1f1f35", border: "none", borderRadius: 4, color: "#9ca3af", fontSize: 11, cursor: "pointer" }}>{p}</button>)}
+                        </div>
+                        <button onClick={labPlaceTrade} disabled={labLoading || labBalance <= 0 || botStatus === "running"} style={{ padding: "9px 22px", background: (labLoading || botStatus === "running") ? "#1f1f35" : "#7c3aed", border: "none", borderRadius: 6, color: (labLoading || botStatus === "running") ? "#555" : "#fff", fontWeight: "bold", fontSize: 14, cursor: (labLoading || botStatus === "running") ? "not-allowed" : "pointer" }}>
+                          {labLoading ? "⏳..." : "Placer le trade"}
+                        </button>
+                      </div>
+                      {labMsg && <div style={{ marginTop: 10, padding: "8px 14px", borderRadius: 6, fontSize: 12, background: labMsg.ok ? "#052e16" : "#1a0000", color: labMsg.ok ? "#34d399" : "#f87171", border: `1px solid ${labMsg.ok ? "#34d39933" : "#ef444433"}` }}>{labMsg.ok || labMsg.error}</div>}
+                      <p style={{ margin: "8px 0 0", fontSize: 10, color: "#374151" }}>Résolution automatique après 15 min vs prix Binance réel. Le signal algo ci-dessus est indicatif.</p>
+                    </div>
+                    {labPending.length > 0 && (
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ fontSize: 10, color: "#555", letterSpacing: 1, marginBottom: 8 }}>EN ATTENTE ({labPending.length})</div>
+                        {labPending.map((t, i) => (
+                          <div key={i} style={{ background: "#0a0a18", border: "1px solid #f59e0b33", borderRadius: 6, padding: "9px 14px", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 5 }}>
+                            <span style={{ color: t.direction === "LONG" ? "#34d399" : "#f87171", fontWeight: "bold" }}>{t.direction === "LONG" ? "▲" : "▼"} {t.direction}</span>
+                            <span style={{ color: "#a78bfa", fontWeight: "bold" }}>{t.pair.replace("USDT","")}</span>
+                            <span style={{ fontSize: 12, color: "#9ca3af" }}>Mise ${t.amount}</span>
+                            <span style={{ fontSize: 11, color: "#555" }}>@ ${parseFloat(t.price_at_entry).toLocaleString()}</span>
+                            <span style={{ marginLeft: "auto", color: "#f59e0b", fontSize: 11 }}>⏳ en cours</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── MODE AUTO ── */}
+                {labMode === "auto" && (
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ width: 10, height: 10, borderRadius: "50%", background: botStatus === "running" ? "#34d399" : "#555", boxShadow: botStatus === "running" ? "0 0 8px #34d399" : "none" }} />
+                        <span style={{ fontWeight: "bold", color: botStatus === "running" ? "#34d399" : "#666", fontSize: 14 }}>{botStatus === "running" ? "BOT EN COURS" : "BOT ARRÊTÉ"}</span>
+                      </div>
+                      {botStatus === "stopped" ? (
+                        <button onClick={labStartBot} style={{ padding: "8px 20px", background: "#059669", border: "none", borderRadius: 6, color: "#fff", fontWeight: "bold", cursor: "pointer", fontSize: 13 }}>▶ Démarrer</button>
+                      ) : (
+                        <button onClick={labStopBot} style={{ padding: "8px 20px", background: "#dc2626", border: "none", borderRadius: 6, color: "#fff", fontWeight: "bold", cursor: "pointer", fontSize: 13 }}>■ Arrêter</button>
+                      )}
+                      <span style={{ fontSize: 11, color: "#555" }}>Mode simulation — consomme le solde Lab ci-dessus</span>
+                    </div>
+                    {botStatus === "stopped" && (
+                      <div style={{ background: "#0a0a1a", borderRadius: 10, padding: 16, marginBottom: 20, border: "1px solid #1f1f35" }}>
+                        <div style={{ fontSize: 10, color: "#555", marginBottom: 12, letterSpacing: 1 }}>CONFIGURATION</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12 }}>
+                          {[
+                            { label: "Stratégie", key: "strategy", type: "select", options: ["auto","contrarian","momentum","rsi","martingale","random"] },
+                            { label: "Mise % balance", key: "betPercentage", type: "number", placeholder: "ex: 10" },
+                            { label: "Stop-loss (BNB)", key: "maxLoss", type: "number", placeholder: "ex: 0.5" },
+                          ].map(field => (
+                            <div key={field.key}>
+                              <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>{field.label}</div>
+                              {field.type === "select" ? (
+                                <select value={botForm[field.key]} onChange={e => setBotForm(f => ({ ...f, [field.key]: e.target.value }))} style={{ width: "100%", background: "#111128", border: "1px solid #1f1f35", borderRadius: 6, color: "#fff", padding: "6px 8px", fontSize: 12 }}>
+                                  {field.options.map(o => <option key={o} value={o}>{o}</option>)}
+                                </select>
+                              ) : (
+                                <input type="number" value={botForm[field.key]} onChange={e => setBotForm(f => ({ ...f, [field.key]: e.target.value }))} placeholder={field.placeholder} style={{ width: "100%", background: "#111128", border: "1px solid #1f1f35", borderRadius: 6, color: "#fff", padding: "6px 8px", fontSize: 12, boxSizing: "border-box" }} />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {botDecision && (
+                      <div style={{ background: "#0a0a1a", borderRadius: 10, padding: 16, marginBottom: 20, border: `1px solid ${botDecision.action === "BET_BULL" ? "#34d39944" : botDecision.action === "BET_BEAR" ? "#f8717144" : "#1f1f35"}` }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                          <span style={{ fontSize: 10, color: "#555", letterSpacing: 1 }}>DÉCISION — Round #{botDecision.epoch}</span>
+                          <span style={{ fontSize: 10, color: "#444" }}>{botDecision.timestamp ? new Date(botDecision.timestamp).toLocaleTimeString("fr-FR") : ""}</span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+                          <div style={{ fontSize: 26, fontWeight: "bold", color: botDecision.action === "BET_BULL" ? "#34d399" : botDecision.action === "BET_BEAR" ? "#f87171" : "#555" }}>{botDecision.action === "BET_BULL" ? "▲ BULL" : botDecision.action === "BET_BEAR" ? "▼ BEAR" : "⏭ SKIP"}</div>
+                          {botDecision.confidence > 0 && (
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#555", marginBottom: 3 }}><span>Confiance</span><span style={{ color: "#a78bfa", fontWeight: "bold" }}>{(botDecision.confidence * 100).toFixed(0)}%</span></div>
+                              <div style={{ background: "#1a1a2e", borderRadius: 3, height: 5, overflow: "hidden" }}><div style={{ width: `${botDecision.confidence * 100}%`, height: "100%", background: botDecision.confidence >= 0.7 ? "#34d399" : "#fbbf24" }} /></div>
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#9ca3af", padding: "6px 10px", background: "#111128", borderRadius: 6, marginBottom: 10 }}>{botDecision.reason}</div>
+                        {botDecision.signals?.length > 0 && (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                            {botDecision.signals.map((s, i) => <span key={i} style={{ padding: "3px 8px", borderRadius: 4, fontSize: 11, background: s.direction === "bull" ? "#0d2818" : "#2a0f0f", color: s.direction === "bull" ? "#34d399" : "#f87171" }}><strong>{s.name}</strong> {s.direction === "bull" ? "▲" : "▼"}</span>)}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {botLogs.length > 0 && (
+                      <div style={{ background: "#050508", borderRadius: 10, padding: 14, marginBottom: 20, border: "1px solid #1f1f35", maxHeight: 200, overflowY: "auto" }}>
+                        <div style={{ fontSize: 10, color: "#555", marginBottom: 8, letterSpacing: 1 }}>LOGS TEMPS RÉEL</div>
+                        {botLogs.map((log, i) => <div key={i} style={{ fontSize: 11, fontFamily: "monospace", marginBottom: 2, color: log.level === "success" ? "#34d399" : log.level === "loss" ? "#f87171" : log.level === "warn" ? "#fbbf24" : "#555" }}><span style={{ color: "#333", marginRight: 8 }}>{log.time ? new Date(log.time).toLocaleTimeString("fr-FR") : ""}</span>{log.message}</div>)}
+                        <div ref={logsEndRef} />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ─ Historique unifié ─ */}
+                <div style={{ marginTop: 8 }}>
+                  {labHistory.length > 0 ? (
+                    <>
+                      <div style={{ fontSize: 10, color: "#555", letterSpacing: 1, marginBottom: 10 }}>HISTORIQUE UNIFIÉ <span style={{ color: "#374151" }}>🎮 Manuel · 🤖 Bot</span></div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                        {labHistory.map((t, i) => {
+                          const isManual = t.source === "manual";
+                          const isPending = t.result === "pending";
+                          const pnl = parseFloat(t.pnl || t.profit || 0);
+                          const color = isPending ? "#f59e0b" : t.result === "cancelled" ? "#555" : t.result === "win" ? "#34d399" : "#f87171";
+                          return (
+                            <div key={i} style={{ background: "#0a0a18", border: "1px solid #1f1f35", borderRadius: 6, padding: "9px 14px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                              <span style={{ fontSize: 13, color: isManual ? "#a78bfa" : "#f59e0b" }}>{isManual ? "🎮" : "🤖"}</span>
+                              <span style={{ fontWeight: "bold", color: (t.direction === "LONG" || t.direction === "bull") ? "#34d399" : "#f87171", fontSize: 13, minWidth: 55 }}>{(t.direction === "LONG" || t.direction === "bull") ? "▲" : "▼"} {t.direction?.toUpperCase()}</span>
+                              <span style={{ color: "#a78bfa", fontWeight: "bold", fontSize: 12, minWidth: 36 }}>{(t.pair || "BNB").replace("USDT","")}</span>
+                              <span style={{ fontSize: 12, color: "#9ca3af" }}>Mise <strong style={{ color: "#e5e7eb" }}>${parseFloat(t.amount || 0).toFixed(2)}</strong></span>
+                              {t.price_at_entry && <span style={{ fontSize: 11, color: "#555" }}>@ ${parseFloat(t.price_at_entry).toLocaleString()}</span>}
+                              <span style={{ marginLeft: "auto", fontWeight: "bold", color, fontSize: 13 }}>{isPending ? "⏳" : t.result === "cancelled" ? "✕" : `${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}`}</span>
+                              <span style={{ fontSize: 10, color: "#374151" }}>{new Date(t.created_at).toLocaleTimeString("fr-FR")}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ textAlign: "center", color: "#374151", padding: "40px 0", fontSize: 13 }}>
+                      Aucun trade pour l'instant.<br/>
+                      <span style={{ fontSize: 12 }}>🎮 Mode Manuel — ouvre ta première position · 🤖 Mode Auto — lance le bot PancakeSwap</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* PLACEHOLDER for old simulator content removal */}
+                {false && <div>
                 {/* Solde + progression */}
                 <div style={{ display: "flex", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
                   <div style={{ flex: 1, minWidth: 220, background: "#0a0a18", border: "1px solid #1f1f35", borderRadius: 10, padding: "20px 24px" }}>
@@ -1007,11 +1259,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                 )}
-                {simTrades.length === 0 && (
-                  <div style={{ textAlign: "center", color: "#374151", padding: "40px 0", fontSize: 14 }}>
-                    Aucun trade pour l'instant. Lancez votre premier ordre !
-                  </div>
-                )}
+                </div>}
               </div>
             )}
 
@@ -1149,7 +1397,7 @@ export default function Dashboard() {
               </div>
             )}
 
-            {activeTab === "bot" && (
+            {activeTab === "bot" && false && (
               <div>
 
                 {/* Statut + contrôles */}
