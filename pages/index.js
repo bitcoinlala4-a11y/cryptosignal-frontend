@@ -116,22 +116,35 @@ export default function Home() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/register";
-    const res = await fetch(`${API}${endpoint}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    const data = await res.json();
-    setLoading(false);
-    if (data.error) return setError(data.error);
-    if (mode === "register") {
-      router.push(`/verify?email=${encodeURIComponent(form.email)}`);
-    } else if (data.needsVerification) {
-      router.push(`/verify?email=${encodeURIComponent(form.email)}`);
-    } else {
-      localStorage.setItem("token", data.token);
-      router.push("/dashboard");
+    try {
+      const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/register";
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20000);
+      const res = await fetch(`${API}${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      const data = await res.json();
+      if (data.error) return setError(data.error);
+      if (mode === "register") {
+        router.push(`/verify?email=${encodeURIComponent(form.email)}`);
+      } else if (data.needsVerification) {
+        router.push(`/verify?email=${encodeURIComponent(form.email)}`);
+      } else {
+        localStorage.setItem("token", data.token);
+        router.push("/dashboard");
+      }
+    } catch (err) {
+      if (err.name === "AbortError") {
+        setError("Le serveur met du temps à répondre, réessaie dans quelques secondes.");
+      } else {
+        setError("Impossible de joindre le serveur. Vérifie ta connexion.");
+      }
+    } finally {
+      setLoading(false);
     }
   }
 
