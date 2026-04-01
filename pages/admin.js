@@ -14,12 +14,18 @@ export default function Admin() {
   const [planForm, setPlanForm] = useState({ plan: "pro", months: 1 });
 
   async function login() {
-    const res = await fetch(`${API}/api/admin/stats`, { headers: { "x-admin-secret": secret } });
-    if (res.status === 403) return setError("Secret incorrect");
-    const d = await res.json();
-    setStats(d);
-    setAuthed(true);
-    loadUsers();
+    try {
+      const res = await fetch(`${API}/api/admin/stats`, { headers: { "x-admin-secret": secret } });
+      if (res.status === 403) return setError("Secret incorrect");
+      if (!res.ok) return setError(`Erreur serveur (${res.status})`);
+      const d = await res.json();
+      if (d.error) return setError(d.error);
+      setStats(d);
+      setAuthed(true);
+      loadUsers();
+    } catch (e) {
+      setError("Impossible de joindre le serveur : " + e.message);
+    }
   }
 
   async function loadUsers() {
