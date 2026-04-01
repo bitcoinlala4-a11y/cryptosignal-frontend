@@ -234,6 +234,13 @@ export default function Dashboard() {
     return () => clearInterval(i);
   }, []);
 
+  // Keep-alive — ping toutes les 10 min pour garder Render éveillé
+  useEffect(() => {
+    const ping = () => fetch(`${API}/api/health`).catch(() => {});
+    const i = setInterval(ping, 10 * 60 * 1000);
+    return () => clearInterval(i);
+  }, []);
+
   function connectWS(t) {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
     const ws = new WebSocket(`${WS_URL}/ws?token=${t}`);
@@ -429,10 +436,23 @@ export default function Dashboard() {
                 </div>
                 {userPlan === "free" && (
                   <div style={s.upgradeBanner}>
-                    <span>🔒 Plan Free : BTC & ETH uniquement, 1h, 5 signaux/jour</span>
-                    <button style={s.upgradeBtn} onClick={() => router.push("/pricing")}>Passer au Pro →</button>
+                    <span>🔒 Plan Free : BTC & ETH, données différées 30 min, 5 signaux/jour</span>
+                    <button style={s.upgradeBtn} onClick={() => router.push("/pricing")}>Passer au Pro — 7 USDT/sem →</button>
                   </div>
                 )}
+
+                {/* Bannière Binance affiliation */}
+                <a href="https://www.binance.com/fr/activity/referral-entry/CPA?ref=CPA_00QJ7WFZCS" target="_blank" rel="noopener noreferrer"
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: "linear-gradient(135deg, #1a1200, #1a0f00)", border: "1px solid #f59e0b33", borderRadius: 10, padding: "14px 18px", marginTop: 14, textDecoration: "none", cursor: "pointer" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <span style={{ fontSize: 24 }}>🟡</span>
+                    <div>
+                      <div style={{ fontWeight: "bold", color: "#f59e0b", fontSize: 14 }}>Tradez ces signaux sur Binance</div>
+                      <div style={{ fontSize: 12, color: "#9ca3af" }}>-20% sur vos frais de trading avec notre lien partenaire</div>
+                    </div>
+                  </div>
+                  <span style={{ color: "#f59e0b", fontWeight: "bold", fontSize: 13, whiteSpace: "nowrap" }}>Ouvrir Binance →</span>
+                </a>
               </div>
             )}
 
@@ -483,12 +503,21 @@ export default function Dashboard() {
                                 {sig.direction === "long" ? "▲ LONG" : "▼ SHORT"}
                               </td>
                               <td style={s.td}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                  <div style={{ width: 40, height: 4, background: "#0f0f1a", borderRadius: 2, overflow: "hidden" }}>
-                                    <div style={{ width: `${(sig.confidence || 0) * 100}%`, height: "100%", background: "#7c3aed" }} />
-                                  </div>
-                                  <span>{sig.confidence != null ? `${(sig.confidence * 100).toFixed(0)}%` : "—"}</span>
-                                </div>
+                                {sig.confidence != null ? (() => {
+                                  const pct = Math.round(sig.confidence * 100);
+                                  const isHigh = pct >= 80;
+                                  return (
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 90 }}>
+                                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                        <div style={{ flex: 1, height: 4, background: "#0f0f1a", borderRadius: 2, overflow: "hidden" }}>
+                                          <div style={{ width: `${pct}%`, height: "100%", background: pct >= 80 ? "#34d399" : pct >= 60 ? "#a78bfa" : "#fbbf24", borderRadius: 2 }} />
+                                        </div>
+                                        <span style={{ fontSize: 11, color: pct >= 80 ? "#34d399" : "#9ca3af", fontWeight: "bold" }}>{pct}%</span>
+                                      </div>
+                                      {isHigh && <span style={{ fontSize: 9, fontWeight: "bold", color: "#34d399", textShadow: "0 0 6px #34d39988", letterSpacing: 0.3 }}>⚡ HAUTE PROBABILITÉ</span>}
+                                    </div>
+                                  );
+                                })() : "—"}
                               </td>
                               <td style={{ ...s.td, color: "#fff", fontFamily: "monospace" }}>
                                 ${entry.toLocaleString("en-US", { maximumFractionDigits: 2 })}
