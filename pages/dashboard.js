@@ -36,6 +36,20 @@ export default function Dashboard() {
   const [botForm, setBotForm] = useState({ strategy: "auto", betPercentage: "10", initialBalance: "100", market: "BNB", dryRun: true, maxLoss: "0.5", betAmount: "0.01" });
   const logsEndRef = useRef(null);
 
+  // ── Profil ───────────────────────────────────────────────────────────────
+  const [profile, setProfile] = useState(null);
+  const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
+  const [pwMsg, setPwMsg] = useState(null);
+  const [tgChatId, setTgChatId] = useState("");
+  const [tgPrefs, setTgPrefs] = useState({ pairs: ["BTC","ETH","BNB","SOL"], minConf: 60, types: ["rsi","ema","macd","momentum"] });
+  const [tgMsg, setTgMsg] = useState(null);
+  const [referralCode, setReferralCode] = useState(null);
+  const [referrals, setReferrals] = useState([]);
+  const [savedKey, setSavedKey] = useState(null);
+  const [keyInput, setKeyInput] = useState("");
+  const [keyMsg, setKeyMsg] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
+
   const wsRef = useRef(null);
   const token = useRef(null);
 
@@ -44,7 +58,10 @@ export default function Dashboard() {
     if (!token.current) { router.push("/"); return; }
     loadAll(token.current);
     connectWS(token.current);
-    return () => { wsRef.current?.close(); wsRef.current = null; };
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => { wsRef.current?.close(); wsRef.current = null; window.removeEventListener("resize", onResize); };
   }, []);
 
   async function safeJson(res) {
@@ -78,6 +95,23 @@ export default function Dashboard() {
     if (sigData?.limits?.timeframes) { setAllowedTimeframes(sigData.limits.timeframes); setSelectedTimeframe(sigData.limits.timeframes[0]); }
     if (sigStatsData?.byType) setSignalStats(sigStatsData);
     if (matrixData?.matrix) { setMatrix(matrixData.matrix); setMatrixTimeframes(matrixData.timeframes || []); }
+    loadProfile(t);
+  }
+
+  async function loadProfile(t) {
+    try {
+      const [meRes, refRes, keyRes] = await Promise.all([
+        fetch(`${API}/api/profile/me`, { headers: { Authorization: `Bearer ${t}` } }),
+        fetch(`${API}/api/referral/code`, { headers: { Authorization: `Bearer ${t}` } }),
+        fetch(`${API}/api/profile/key`, { headers: { Authorization: `Bearer ${t}` } }),
+      ]);
+      const me = await meRes.json().catch(() => ({}));
+      const ref = await refRes.json().catch(() => ({}));
+      const key = await keyRes.json().catch(() => ({}));
+      if (me.email) { setProfile(me); setTgChatId(me.telegram_chat_id || ""); }
+      if (ref.code) { setReferralCode(ref.code); setReferrals(ref.referrals || []); }
+      if (key.hasSavedKey) setSavedKey(key.key);
+    } catch {}
   }
 
   async function loadBot(t) {
@@ -124,6 +158,35 @@ export default function Dashboard() {
   async function resetBot() {
     await fetch(`${API}/api/bot/reset`, { method: "POST", headers: { Authorization: `Bearer ${token.current}` } });
     setBotStats(null); setBotHistory([]); setBotDecision(null); setBotLogs([]);
+  }
+
+  async function changePassword() {
+    if (pwForm.next !== pwForm.confirm) return setPwMsg({ error: "Les mots de passe ne correspondent pas" });
+    const res = await fetch(`${API}/api/profile/password`, { method: "PUT", headers: { Authorization: `Bearer ${token.current}`, "Content-Type": "application/json" }, body: JSON.stringify({ currentPassword: pwForm.current, newPassword: pwForm.next }) });
+    const d = await res.json();
+    if (d.success) { setPwMsg({ ok: "Mot de passe changé !" }); setPwForm({ current: "", next: "", confirm: "" }); }
+    else setPwMsg({ error: d.error });
+  }
+
+  async function saveTelegram() {
+    const res = await fetch(`${API}/api/profile/telegram`, { method: "PUT", headers: { Authorization: `Bearer ${token.current}`, "Content-Type": "application/json" }, body: JSON.stringify({ telegram_chat_id: tgChatId, telegram_prefs: tgPrefs }) });
+    const d = await res.json();
+    setTgMsg(d.success ? { ok: "Sauvegardé !" } : { error: d.error });
+    setTimeout(() => setTgMsg(null), 3000);
+  }
+
+  async function saveKey() {
+    if (!keyInput) return;
+    const res = await fetch(`${API}/api/profile/save-key`, { method: "POST", headers: { Authorization: `Bearer ${token.current}`, "Content-Type": "application/json" }, body: JSON.stringify({ privateKey: keyInput }) });
+    const d = await res.json();
+    if (d.success) { setKeyMsg({ ok: "Clé sauvegardée et chiffrée !" }); setKeyInput(""); setSavedKey("••••••"); }
+    else setKeyMsg({ error: d.error });
+    setTimeout(() => setKeyMsg(null), 4000);
+  }
+
+  async function deleteKey() {
+    await fetch(`${API}/api/profile/key`, { method: "DELETE", headers: { Authorization: `Bearer ${token.current}` } });
+    setSavedKey(null);
   }
 
   async function loadPancake(t) {
@@ -315,6 +378,7 @@ export default function Dashboard() {
                 ...(userPlan !== "free" ? [{ id: "matrix", label: "🔲 Matrice" }] : []),
                 ...(userPlan === "elite" ? [{ id: "pancake", label: "🥞 PancakeSwap" }] : []),
                 { id: "bot", label: `🤖 Bot${botStatus === "running" ? " ●" : ""}` },
+                { id: "profil", label: "👤 Profil" },
               ].map(tab => (
                 <button key={tab.id} style={activeTab === tab.id ? s.tabActive : s.tab} onClick={() => setActiveTab(tab.id)}>
                   {tab.label}
@@ -788,6 +852,142 @@ export default function Dashboard() {
                     <div style={{ fontSize: 12, marginTop: 6, color: "#333" }}>Mode simulation recommandé pour commencer</div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* ── PROFIL ──────────────────────────────────────────────── */}
+            {activeTab === "profil" && (
+              <div style={{ maxWidth: 600 }}>
+                {/* Infos compte */}
+                <div style={{ background: "#0a0a1a", borderRadius: 10, padding: 20, marginBottom: 16, border: "1px solid #1f1f35" }}>
+                  <div style={{ fontSize: 11, color: "#555", marginBottom: 14, letterSpacing: 1 }}>INFORMATIONS DU COMPTE</div>
+                  {profile && (
+                    <div style={{ display: "grid", gap: 10 }}>
+                      {[
+                        { label: "Email", value: profile.email },
+                        { label: "Plan", value: profile.plan?.toUpperCase(), color: profile.plan === "elite" ? "#f59e0b" : profile.plan === "pro" ? "#a78bfa" : "#6b7280" },
+                        { label: "Expiration", value: profile.plan_expires_at ? new Date(profile.plan_expires_at).toLocaleDateString("fr-FR") : "—" },
+                        { label: "Membre depuis", value: new Date(profile.created_at).toLocaleDateString("fr-FR") },
+                        { label: "Filleuls", value: `${profile.referral_count || 0} parrainage(s)` },
+                      ].map(item => (
+                        <div key={item.label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #111128" }}>
+                          <span style={{ color: "#555", fontSize: 13 }}>{item.label}</span>
+                          <span style={{ color: item.color || "#e5e7eb", fontWeight: "bold", fontSize: 13 }}>{item.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Changer mot de passe */}
+                <div style={{ background: "#0a0a1a", borderRadius: 10, padding: 20, marginBottom: 16, border: "1px solid #1f1f35" }}>
+                  <div style={{ fontSize: 11, color: "#555", marginBottom: 14, letterSpacing: 1 }}>CHANGER LE MOT DE PASSE</div>
+                  {[
+                    { label: "Mot de passe actuel", key: "current" },
+                    { label: "Nouveau mot de passe", key: "next" },
+                    { label: "Confirmer le nouveau", key: "confirm" },
+                  ].map(f => (
+                    <div key={f.key} style={{ marginBottom: 10 }}>
+                      <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>{f.label}</div>
+                      <input type="password" value={pwForm[f.key]} onChange={e => setPwForm(p => ({ ...p, [f.key]: e.target.value }))}
+                        style={{ width: "100%", background: "#111128", border: "1px solid #1f1f35", borderRadius: 6, color: "#fff", padding: "8px 10px", fontSize: 13, boxSizing: "border-box" }} />
+                    </div>
+                  ))}
+                  {pwMsg && <div style={{ fontSize: 12, marginBottom: 8, color: pwMsg.ok ? "#34d399" : "#f87171" }}>{pwMsg.ok || pwMsg.error}</div>}
+                  <button onClick={changePassword} style={{ padding: "8px 20px", background: "#7c3aed", border: "none", borderRadius: 6, color: "#fff", fontWeight: "bold", cursor: "pointer", fontSize: 13 }}>
+                    Mettre à jour
+                  </button>
+                </div>
+
+                {/* Parrainage */}
+                <div style={{ background: "#0a0a1a", borderRadius: 10, padding: 20, marginBottom: 16, border: "1px solid #1f1f35" }}>
+                  <div style={{ fontSize: 11, color: "#555", marginBottom: 14, letterSpacing: 1 }}>PARRAINAGE</div>
+                  <p style={{ color: "#9ca3af", fontSize: 12, marginBottom: 14 }}>Invitez un ami avec votre code — il s'inscrit, vous recevez <strong style={{ color: "#34d399" }}>1 mois gratuit</strong> sur votre plan.</p>
+                  {referralCode && (
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 14 }}>
+                      <div style={{ flex: 1, background: "#111128", border: "1px solid #7c3aed44", borderRadius: 6, padding: "10px 14px", fontFamily: "monospace", fontSize: 18, fontWeight: "bold", color: "#a78bfa", letterSpacing: 3 }}>
+                        {referralCode}
+                      </div>
+                      <button onClick={() => navigator.clipboard.writeText(`https://www.cryptosignal.cloud?ref=${referralCode}`)}
+                        style={{ padding: "10px 14px", background: "#1f1f35", border: "none", borderRadius: 6, color: "#9ca3af", cursor: "pointer", fontSize: 12 }}>
+                        Copier lien
+                      </button>
+                    </div>
+                  )}
+                  {referrals.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 11, color: "#444", marginBottom: 6 }}>{referrals.length} filleul(s)</div>
+                      {referrals.map((r, i) => (
+                        <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "4px 0", borderBottom: "1px solid #111128" }}>
+                          <span style={{ color: "#9ca3af" }}>{r.email}</span>
+                          <span style={{ color: "#555" }}>{new Date(r.created_at).toLocaleDateString("fr-FR")}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Telegram */}
+                <div style={{ background: "#0a0a1a", borderRadius: 10, padding: 20, marginBottom: 16, border: "1px solid #1f1f35" }}>
+                  <div style={{ fontSize: 11, color: "#555", marginBottom: 14, letterSpacing: 1 }}>ALERTES TELEGRAM</div>
+                  <p style={{ color: "#9ca3af", fontSize: 12, marginBottom: 10 }}>Obtenez votre Chat ID sur <strong>@userinfobot</strong> Telegram.</p>
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>Chat ID Telegram</div>
+                    <input value={tgChatId} onChange={e => setTgChatId(e.target.value)} placeholder="ex: 123456789"
+                      style={{ width: "100%", background: "#111128", border: "1px solid #1f1f35", borderRadius: 6, color: "#fff", padding: "8px 10px", fontSize: 13, boxSizing: "border-box" }} />
+                  </div>
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 11, color: "#666", marginBottom: 6 }}>Confiance minimum</div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {[40, 50, 60, 70, 80].map(v => (
+                        <button key={v} onClick={() => setTgPrefs(p => ({ ...p, minConf: v }))}
+                          style={{ padding: "4px 12px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontWeight: tgPrefs.minConf === v ? "bold" : "normal", background: tgPrefs.minConf === v ? "#7c3aed" : "#111128", color: tgPrefs.minConf === v ? "#fff" : "#666" }}>
+                          {v}%
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, color: "#666", marginBottom: 6 }}>Paires</div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {["BTC","ETH","BNB","SOL","DOGE","AVAX"].map(p => (
+                        <button key={p} onClick={() => setTgPrefs(pr => ({ ...pr, pairs: pr.pairs.includes(p) ? pr.pairs.filter(x => x !== p) : [...pr.pairs, p] }))}
+                          style={{ padding: "4px 10px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, background: tgPrefs.pairs.includes(p) ? "#7c3aed" : "#111128", color: tgPrefs.pairs.includes(p) ? "#fff" : "#666" }}>
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {tgMsg && <div style={{ fontSize: 12, marginBottom: 8, color: tgMsg.ok ? "#34d399" : "#f87171" }}>{tgMsg.ok || tgMsg.error}</div>}
+                  <button onClick={saveTelegram} style={{ padding: "8px 20px", background: "#7c3aed", border: "none", borderRadius: 6, color: "#fff", fontWeight: "bold", cursor: "pointer", fontSize: 13 }}>
+                    Sauvegarder
+                  </button>
+                </div>
+
+                {/* Clé privée */}
+                <div style={{ background: "#0a0a1a", borderRadius: 10, padding: 20, border: "1px solid #1f1f35" }}>
+                  <div style={{ fontSize: 11, color: "#555", marginBottom: 14, letterSpacing: 1 }}>CLÉ PRIVÉE (CHIFFRÉE)</div>
+                  <p style={{ color: "#9ca3af", fontSize: 12, marginBottom: 12 }}>Sauvegardez votre clé privée chiffrée (AES-256) pour ne pas avoir à la ressaisir à chaque démarrage du bot.</p>
+                  {savedKey ? (
+                    <div>
+                      <div style={{ background: "#111128", border: "1px solid #34d39933", borderRadius: 6, padding: "10px 14px", fontFamily: "monospace", fontSize: 13, color: "#34d399", marginBottom: 10 }}>
+                        🔒 {savedKey}
+                      </div>
+                      <button onClick={deleteKey} style={{ padding: "7px 14px", background: "none", border: "1px solid #f87171", borderRadius: 6, color: "#f87171", cursor: "pointer", fontSize: 12 }}>
+                        Supprimer la clé
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <input type="password" value={keyInput} onChange={e => setKeyInput(e.target.value)} placeholder="0x..."
+                        style={{ width: "100%", background: "#111128", border: "1px solid #1f1f35", borderRadius: 6, color: "#fff", padding: "8px 10px", fontSize: 13, boxSizing: "border-box", marginBottom: 8 }} />
+                      {keyMsg && <div style={{ fontSize: 12, marginBottom: 8, color: keyMsg.ok ? "#34d399" : "#f87171" }}>{keyMsg.ok || keyMsg.error}</div>}
+                      <button onClick={saveKey} style={{ padding: "8px 20px", background: "#7c3aed", border: "none", borderRadius: 6, color: "#fff", fontWeight: "bold", cursor: "pointer", fontSize: 13 }}>
+                        Chiffrer et sauvegarder
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
