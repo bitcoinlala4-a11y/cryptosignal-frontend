@@ -57,6 +57,15 @@ export default function Dashboard() {
   const [polyScannedAt, setPolyScannedAt] = useState(null);
   const [polyScanning, setPolyScanning] = useState(false);
 
+  // ── Simulateur ───────────────────────────────────────────────────────────
+  const [simBalance, setSimBalance] = useState(1000);
+  const [simCanReset, setSimCanReset] = useState(true);
+  const [simTrades, setSimTrades] = useState([]);
+  const [simStats, setSimStats] = useState(null);
+  const [simForm, setSimForm] = useState({ pair: "BTCUSDT", direction: "LONG", amount: "50" });
+  const [simMsg, setSimMsg] = useState(null);
+  const [simLoading, setSimLoading] = useState(false);
+
   const wsRef = useRef(null);
   const token = useRef(null);
 
@@ -109,6 +118,7 @@ export default function Dashboard() {
     fetch(`${API}/api/market/whales`).then(r => r.json()).then(d => { if (d.whales) setWhales(d.whales); }).catch(() => {});
     fetch(`${API}/api/market/news`).then(r => r.json()).then(d => { if (d.news) setNews(d.news); }).catch(() => {});
     loadPolymarket(t);
+    loadSimulator(t);
   }
 
   async function loadPolymarket(t) {
@@ -119,6 +129,53 @@ export default function Dashboard() {
       if (d.scannedAt)       setPolyScannedAt(d.scannedAt);
       if (d.scanInProgress)  setPolyScanning(d.scanInProgress);
     } catch {}
+  }
+
+  async function loadSimulator(t) {
+    try {
+      const [balRes, histRes] = await Promise.all([
+        fetch(`${API}/api/simulator/balance`, { headers: { Authorization: `Bearer ${t}` } }),
+        fetch(`${API}/api/simulator/history`, { headers: { Authorization: `Bearer ${t}` } }),
+      ]);
+      const bal  = await balRes.json().catch(() => ({}));
+      const hist = await histRes.json().catch(() => ({}));
+      if (bal.balance  != null) setSimBalance(bal.balance);
+      if (bal.canReset != null) setSimCanReset(bal.canReset);
+      if (hist.trades)          setSimTrades(hist.trades);
+      if (hist.stats)           setSimStats(hist.stats);
+    } catch {}
+  }
+
+  async function placeTrade() {
+    if (simLoading) return;
+    setSimLoading(true);
+    setSimMsg(null);
+    try {
+      const res = await fetch(`${API}/api/simulator/trade`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token.current}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ pair: simForm.pair, direction: simForm.direction, amount: parseFloat(simForm.amount) }),
+      });
+      const d = await res.json();
+      if (d.success) {
+        setSimBalance(d.newBalance);
+        setSimMsg({ ok: d.message });
+        loadSimulator(token.current);
+      } else {
+        setSimMsg({ error: d.error });
+      }
+    } catch { setSimMsg({ error: "Erreur réseau." }); }
+    setSimLoading(false);
+    setTimeout(() => setSimMsg(null), 6000);
+  }
+
+  async function resetSimulator() {
+    if (!window.confirm("Réinitialiser votre solde à $1 000 ? Cette action est unique et irréversible.")) return;
+    const res = await fetch(`${API}/api/simulator/reset`, { method: "POST", headers: { Authorization: `Bearer ${token.current}` } });
+    const d = await res.json();
+    if (d.success) { setSimBalance(1000); setSimCanReset(false); setSimMsg({ ok: d.message }); loadSimulator(token.current); }
+    else setSimMsg({ error: d.error });
+    setTimeout(() => setSimMsg(null), 6000);
   }
 
   async function triggerPolyScan() {
@@ -479,6 +536,7 @@ export default function Dashboard() {
                 ...(userPlan !== "free" ? [{ id: "matrix", label: "🔲 Matrice" }] : []),
                 ...(userPlan === "elite" ? [{ id: "pancake", label: "🥞 PancakeSwap" }] : []),
                 { id: "polymarket", label: `🎯 Polymarket${polyGaps.length > 0 ? ` (${polyGaps.length})` : ""}` },
+                { id: "simulator", label: `🎮 Simulateur ($${Math.round(simBalance)})` },
                 { id: "bot", label: `🤖 Bot${botStatus === "running" ? " ●" : ""}` },
                 { id: "profil", label: "👤 Profil" },
               ].map(tab => (
@@ -805,6 +863,158 @@ export default function Dashboard() {
               </div>
             )}
             {/* ── BOT ─────────────────────────────────────────────────────── */}
+            {/* ── Onglet Simulateur ────────────────────────────────────────────── */}
+            {activeTab === "simulator" && (
+              <div>
+                {/* Solde + progression */}
+                <div style={{ display: "flex", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: 220, background: "#0a0a18", border: "1px solid #1f1f35", borderRadius: 10, padding: "20px 24px" }}>
+                    <div style={{ fontSize: 11, color: "#555", letterSpacing: 1, marginBottom: 6 }}>SOLDE SIMULATEUR</div>
+                    <div style={{ fontSize: 34, fontWeight: "bold", color: simBalance >= 1000 ? "#10b981" : simBalance >= 500 ? "#f59e0b" : "#ef4444" }}>
+                      ${simBalance.toFixed(2)}
+                    </div>
+                    <div style={{ marginTop: 10, height: 6, background: "#1f1f35", borderRadius: 3, overflow: "hidden" }}>
+                      <div style={{ width: `${Math.min(100, Math.max(0, (simBalance / 1000) * 100))}%`, height: "100%", background: simBalance >= 1000 ? "#10b981" : simBalance >= 500 ? "#f59e0b" : "#ef4444", borderRadius: 3, transition: "width 0.5s" }} />
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#555", marginTop: 4 }}>
+                      <span>$0</span><span>$1 000</span>
+                    </div>
+                    {simBalance <= 0 && simCanReset && (
+                      <button onClick={resetSimulator} style={{ marginTop: 12, width: "100%", padding: "8px 0", background: "#dc2626", border: "none", borderRadius: 6, color: "#fff", fontWeight: "bold", cursor: "pointer", fontSize: 13 }}>
+                        🔄 Réinitialiser (1 seule fois)
+                      </button>
+                    )}
+                    {!simCanReset && <div style={{ marginTop: 10, fontSize: 11, color: "#555" }}>Reset déjà utilisé</div>}
+                  </div>
+
+                  {/* Stats */}
+                  {simStats && (
+                    <div style={{ flex: 1, minWidth: 220, background: "#0a0a18", border: "1px solid #1f1f35", borderRadius: 10, padding: "20px 24px", display: "flex", flexDirection: "column", gap: 10 }}>
+                      <div style={{ fontSize: 11, color: "#555", letterSpacing: 1 }}>STATISTIQUES</div>
+                      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                        {[
+                          { label: "Trades", value: simStats.total || 0, color: "#9ca3af" },
+                          { label: "Wins", value: simStats.wins || 0, color: "#34d399" },
+                          { label: "Losses", value: simStats.losses || 0, color: "#f87171" },
+                        ].map(({ label, value, color }) => (
+                          <div key={label} style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: 22, fontWeight: "bold", color }}>{value}</div>
+                            <div style={{ fontSize: 10, color: "#555" }}>{label}</div>
+                          </div>
+                        ))}
+                        <div style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: 22, fontWeight: "bold", color: (simStats.total_pnl || 0) >= 0 ? "#34d399" : "#f87171" }}>
+                            {(simStats.total_pnl || 0) >= 0 ? "+" : ""}${parseFloat(simStats.total_pnl || 0).toFixed(2)}
+                          </div>
+                          <div style={{ fontSize: 10, color: "#555" }}>P&L Total</div>
+                        </div>
+                        {simStats.total > 0 && (
+                          <div style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: 22, fontWeight: "bold", color: "#a78bfa" }}>
+                              {((simStats.wins / simStats.total) * 100).toFixed(0)}%
+                            </div>
+                            <div style={{ fontSize: 10, color: "#555" }}>Win Rate</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Formulaire de trade */}
+                <div style={{ background: "#0a0a18", border: "1px solid #1f1f35", borderRadius: 10, padding: "20px 24px", marginBottom: 20 }}>
+                  <div style={{ fontSize: 11, color: "#555", letterSpacing: 1, marginBottom: 14 }}>PASSER UN ORDRE FICTIF</div>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <label style={{ fontSize: 11, color: "#555" }}>Paire</label>
+                      <select value={simForm.pair} onChange={e => setSimForm(f => ({ ...f, pair: e.target.value }))}
+                        style={{ padding: "8px 12px", background: "#111", border: "1px solid #1f1f35", borderRadius: 6, color: "#e5e7eb", fontSize: 13 }}>
+                        {["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT"].map(p => <option key={p} value={p}>{p.replace("USDT", "")}</option>)}
+                      </select>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <label style={{ fontSize: 11, color: "#555" }}>Direction</label>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        {["LONG","SHORT"].map(d => (
+                          <button key={d} onClick={() => setSimForm(f => ({ ...f, direction: d }))}
+                            style={{ padding: "8px 18px", border: "none", borderRadius: 6, fontWeight: "bold", fontSize: 13, cursor: "pointer",
+                              background: simForm.direction === d ? (d === "LONG" ? "#059669" : "#dc2626") : "#1f1f35",
+                              color: simForm.direction === d ? "#fff" : "#555" }}>
+                            {d === "LONG" ? "▲ LONG" : "▼ SHORT"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <label style={{ fontSize: 11, color: "#555" }}>Mise ($)</label>
+                      <input type="number" min="1" max={simBalance} value={simForm.amount}
+                        onChange={e => setSimForm(f => ({ ...f, amount: e.target.value }))}
+                        style={{ padding: "8px 12px", background: "#111", border: "1px solid #1f1f35", borderRadius: 6, color: "#e5e7eb", fontSize: 13, width: 100 }} />
+                    </div>
+                    <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
+                      {["10%","25%","50%","MAX"].map(p => (
+                        <button key={p} onClick={() => {
+                          const v = p === "MAX" ? simBalance : simBalance * parseInt(p) / 100;
+                          setSimForm(f => ({ ...f, amount: Math.floor(v).toString() }));
+                        }} style={{ padding: "8px 10px", background: "#1f1f35", border: "none", borderRadius: 4, color: "#9ca3af", fontSize: 11, cursor: "pointer" }}>
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+                    <button onClick={placeTrade} disabled={simLoading || simBalance <= 0}
+                      style={{ padding: "9px 24px", background: simLoading ? "#1f1f35" : "#7c3aed", border: "none", borderRadius: 6, color: simLoading ? "#555" : "#fff", fontWeight: "bold", fontSize: 14, cursor: simLoading ? "not-allowed" : "pointer" }}>
+                      {simLoading ? "⏳..." : "Placer le trade"}
+                    </button>
+                  </div>
+                  {simMsg && (
+                    <div style={{ marginTop: 12, padding: "8px 14px", borderRadius: 6, fontSize: 13,
+                      background: simMsg.ok ? "#052e16" : "#1a0000", color: simMsg.ok ? "#34d399" : "#f87171",
+                      border: `1px solid ${simMsg.ok ? "#16a34a44" : "#dc262644"}` }}>
+                      {simMsg.ok || simMsg.error}
+                    </div>
+                  )}
+                  <p style={{ margin: "10px 0 0", fontSize: 11, color: "#374151" }}>
+                    Les trades sont résolus automatiquement après 15 minutes en comparant le prix d'entrée au prix de marché réel.
+                  </p>
+                </div>
+
+                {/* Historique des trades */}
+                {simTrades.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 11, color: "#555", letterSpacing: 1, marginBottom: 10 }}>HISTORIQUE DES TRADES</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {simTrades.map((t, i) => {
+                        const isPending = t.result === "pending";
+                        const isWin     = t.result === "win";
+                        const color     = isPending ? "#f59e0b" : isWin ? "#34d399" : t.result === "cancelled" ? "#555" : "#f87171";
+                        const pnlSign   = (t.pnl || 0) >= 0 ? "+" : "";
+                        return (
+                          <div key={i} style={{ background: "#0a0a18", border: "1px solid #1f1f35", borderRadius: 6, padding: "10px 14px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                            <span style={{ fontWeight: "bold", color: t.direction === "LONG" ? "#34d399" : "#f87171", fontSize: 13, minWidth: 60 }}>
+                              {t.direction === "LONG" ? "▲" : "▼"} {t.direction}
+                            </span>
+                            <span style={{ color: "#a78bfa", fontSize: 13, fontWeight: "bold", minWidth: 50 }}>{t.pair.replace("USDT","")}</span>
+                            <span style={{ fontSize: 12, color: "#9ca3af" }}>Mise <strong style={{ color: "#e5e7eb" }}>${t.amount}</strong></span>
+                            <span style={{ fontSize: 11, color: "#555" }}>Entrée ${parseFloat(t.price_at_entry).toLocaleString()}</span>
+                            {!isPending && t.price_at_close && <span style={{ fontSize: 11, color: "#555" }}>→ ${parseFloat(t.price_at_close).toLocaleString()}</span>}
+                            <span style={{ marginLeft: "auto", fontWeight: "bold", color, fontSize: 13 }}>
+                              {isPending ? "⏳ En cours" : `${pnlSign}$${parseFloat(t.pnl || 0).toFixed(2)} (${pnlSign}${parseFloat(t.pnl_pct || 0).toFixed(2)}%)`}
+                            </span>
+                            <span style={{ fontSize: 10, color: "#374151" }}>{new Date(t.created_at).toLocaleTimeString("fr-FR")}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {simTrades.length === 0 && (
+                  <div style={{ textAlign: "center", color: "#374151", padding: "40px 0", fontSize: 14 }}>
+                    Aucun trade pour l'instant. Lancez votre premier ordre !
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* ── Onglet Polymarket ─────────────────────────────────────────────── */}
             {activeTab === "polymarket" && (
               <div>
