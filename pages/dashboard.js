@@ -52,6 +52,10 @@ export default function Dashboard() {
   const [darkMode, setDarkMode] = useState(true);
   const [whales, setWhales] = useState([]);
   const [news, setNews] = useState([]);
+  const [polyGaps, setPolyGaps] = useState([]);
+  const [polyMovements, setPolyMovements] = useState([]);
+  const [polyScannedAt, setPolyScannedAt] = useState(null);
+  const [polyScanning, setPolyScanning] = useState(false);
 
   const wsRef = useRef(null);
   const token = useRef(null);
@@ -104,6 +108,29 @@ export default function Dashboard() {
     // Gadgets premium (whale + news) — chargés en parallèle sans bloquer
     fetch(`${API}/api/market/whales`).then(r => r.json()).then(d => { if (d.whales) setWhales(d.whales); }).catch(() => {});
     fetch(`${API}/api/market/news`).then(r => r.json()).then(d => { if (d.news) setNews(d.news); }).catch(() => {});
+    loadPolymarket(t);
+  }
+
+  async function loadPolymarket(t) {
+    try {
+      const d = await fetch(`${API}/api/polymarket/signals`, { headers: { Authorization: `Bearer ${t}` } }).then(r => r.json());
+      if (d.gaps)            setPolyGaps(d.gaps);
+      if (d.movementSignals) setPolyMovements(d.movementSignals);
+      if (d.scannedAt)       setPolyScannedAt(d.scannedAt);
+      if (d.scanInProgress)  setPolyScanning(d.scanInProgress);
+    } catch {}
+  }
+
+  async function triggerPolyScan() {
+    setPolyScanning(true);
+    try {
+      await fetch(`${API}/api/polymarket/scan`, { method: "POST", headers: { Authorization: `Bearer ${token.current}` } });
+      // Attend 30s puis recharge
+      setTimeout(() => {
+        loadPolymarket(token.current);
+        setPolyScanning(false);
+      }, 30000);
+    } catch { setPolyScanning(false); }
   }
 
   async function loadProfile(t) {
@@ -451,6 +478,7 @@ export default function Dashboard() {
                 { id: "signals", label: `⚡ Signaux (${signals.length})` },
                 ...(userPlan !== "free" ? [{ id: "matrix", label: "🔲 Matrice" }] : []),
                 ...(userPlan === "elite" ? [{ id: "pancake", label: "🥞 PancakeSwap" }] : []),
+                { id: "polymarket", label: `🎯 Polymarket${polyGaps.length > 0 ? ` (${polyGaps.length})` : ""}` },
                 { id: "bot", label: `🤖 Bot${botStatus === "running" ? " ●" : ""}` },
                 { id: "profil", label: "👤 Profil" },
               ].map(tab => (
@@ -777,6 +805,140 @@ export default function Dashboard() {
               </div>
             )}
             {/* ── BOT ─────────────────────────────────────────────────────── */}
+            {/* ── Onglet Polymarket ─────────────────────────────────────────────── */}
+            {activeTab === "polymarket" && (
+              <div>
+                {/* En-tête + bouton scan */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: "bold", color: "#e5e7eb" }}>🎯 Signaux Polymarket</h3>
+                    <p style={{ margin: "4px 0 0", fontSize: 12, color: "#555" }}>
+                      Arbitrage Polymarket × Manifold — détection automatique toutes les 10 min
+                      {polyScannedAt && <span style={{ marginLeft: 8 }}>· Dernier scan : {new Date(polyScannedAt).toLocaleTimeString("fr-FR")}</span>}
+                    </p>
+                  </div>
+                  {userPlan !== "free" && (
+                    <button
+                      onClick={triggerPolyScan}
+                      disabled={polyScanning}
+                      style={{ padding: "8px 16px", background: polyScanning ? "#1f1f35" : "#7c3aed", border: "none", borderRadius: 6, color: polyScanning ? "#555" : "#fff", cursor: polyScanning ? "not-allowed" : "pointer", fontSize: 13, fontWeight: "bold" }}>
+                      {polyScanning ? "⏳ Scan en cours..." : "🔄 Scanner maintenant"}
+                    </button>
+                  )}
+                  {userPlan === "free" && (
+                    <span style={{ fontSize: 12, color: "#f59e0b", background: "#1a1200", padding: "6px 12px", borderRadius: 6, border: "1px solid #f59e0b44" }}>
+                      ⚠️ Free : signaux FORT uniquement — <a href="/pricing" style={{ color: "#f59e0b" }}>Upgrade</a>
+                    </span>
+                  )}
+                </div>
+
+                {/* Gaps d'arbitrage */}
+                {polyGaps.length === 0 && !polyScanning && (
+                  <div style={{ textAlign: "center", color: "#555", padding: "60px 0", fontSize: 14 }}>
+                    Aucun signal détecté pour l'instant. Le prochain scan automatique est dans moins de 10 min.
+                  </div>
+                )}
+                {polyScanning && polyGaps.length === 0 && (
+                  <div style={{ textAlign: "center", color: "#7c3aed", padding: "60px 0", fontSize: 14 }}>
+                    ⏳ Scan en cours... (environ 30 secondes)
+                  </div>
+                )}
+
+                {polyGaps.length > 0 && (
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{ fontSize: 11, color: "#555", letterSpacing: 1, marginBottom: 10 }}>ÉCARTS D'ARBITRAGE DÉTECTÉS</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {polyGaps.map((g, i) => {
+                        const grade = g.grade || (g.confidence >= 70 ? "FORT" : g.confidence >= 40 ? "MODÉRÉ" : "FAIBLE");
+                        const gradeColor = grade === "FORT" ? "#ef4444" : grade === "MODÉRÉ" ? "#f59e0b" : "#6b7280";
+                        const gradeBg   = grade === "FORT" ? "#1a0000" : grade === "MODÉRÉ" ? "#1a1200" : "#111";
+                        const gapPct    = ((g.gap || 0) * 100).toFixed(1);
+                        const confPct   = g.confidence || 0;
+                        const confBars  = Math.round(confPct / 10);
+                        return (
+                          <div key={i} style={{ background: "#0a0a18", border: `1px solid ${gradeColor}33`, borderRadius: 8, padding: "14px 16px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                              <span style={{ background: gradeBg, color: gradeColor, border: `1px solid ${gradeColor}44`, borderRadius: 4, fontSize: 11, fontWeight: "bold", padding: "2px 8px" }}>
+                                {grade === "FORT" ? "🔴" : grade === "MODÉRÉ" ? "🟡" : "⚪"} {grade}
+                              </span>
+                              <span style={{ color: gradeColor, fontSize: 18, fontWeight: "bold" }}>{gapPct}%</span>
+                              <span style={{ fontSize: 11, color: "#555", background: "#111", padding: "2px 8px", borderRadius: 4 }}>
+                                {g.type === "INTERNAL" ? "ARBITRAGE INTERNE" : "CROSS-MARCHÉ"}
+                              </span>
+                              <span style={{ marginLeft: "auto", fontSize: 11, color: "#9ca3af" }}>
+                                Score {g.score ?? g.confidence ?? "—"}/100 · Conf [{Array(confBars).fill("█").join("") + Array(10 - confBars).fill("░").join("")}]
+                              </span>
+                            </div>
+
+                            {g.type === "INTERNAL" ? (
+                              <p style={{ margin: "0 0 6px", fontSize: 13, color: "#d1d5db" }}>{g.question}</p>
+                            ) : (
+                              <>
+                                <p style={{ margin: "0 0 4px", fontSize: 13, color: "#d1d5db" }}>
+                                  <span style={{ color: "#7c3aed", fontWeight: "bold" }}>Poly</span> {g.polyQuestion}
+                                </p>
+                                <p style={{ margin: "0 0 6px", fontSize: 12, color: "#6b7280" }}>
+                                  <span style={{ color: "#22d3ee", fontWeight: "bold" }}>Mfd</span> {g.manifoldQuestion}
+                                </p>
+                                <div style={{ display: "flex", gap: 16, fontSize: 12, color: "#9ca3af", marginBottom: 6 }}>
+                                  <span>Poly <strong style={{ color: "#e5e7eb" }}>{((g.polyProb || 0) * 100).toFixed(1)}%</strong></span>
+                                  <span>Manifold <strong style={{ color: "#e5e7eb" }}>{((g.manifoldProb || 0) * 100).toFixed(1)}%</strong></span>
+                                  <span style={{ color: g.direction === "POLY_SOUS-ÉVALUÉ" ? "#34d399" : "#f87171" }}>
+                                    {g.direction === "POLY_SOUS-ÉVALUÉ" ? "▲ SOUS-ÉVALUÉ" : "▼ SURÉVALUÉ"}
+                                  </span>
+                                </div>
+                              </>
+                            )}
+
+                            <div style={{ display: "flex", gap: 8, fontSize: 11, flexWrap: "wrap" }}>
+                              <span style={{ color: "#555" }}>Liq ${((g.liqUSD || 0) / 1000).toFixed(1)}k</span>
+                              <span style={{ color: "#555" }}>Spread {g.spreadPct != null ? g.spreadPct.toFixed(1) + "%" : "n/a"}</span>
+                              {g.slug && (
+                                <a href={`https://polymarket.com/event/${g.slug}`} target="_blank" rel="noopener noreferrer"
+                                  style={{ color: "#7c3aed", marginLeft: "auto" }}>
+                                  Voir sur Polymarket →
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Signaux de mouvement */}
+                {polyMovements.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 11, color: "#555", letterSpacing: 1, marginBottom: 10 }}>MOUVEMENTS DE PRIX RÉCENTS (≥3%)</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {polyMovements.map((m, i) => {
+                        const up      = m.movement_pct > 0;
+                        const g       = m.grade || "FAIBLE";
+                        const gColor  = g === "FORT" ? "#ef4444" : g === "MODÉRÉ" ? "#f59e0b" : "#6b7280";
+                        const mvtColor= up ? "#34d399" : "#f87171";
+                        return (
+                          <div key={i} style={{ background: "#0a0a18", border: "1px solid #1f1f35", borderRadius: 6, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                            <span style={{ color: mvtColor, fontWeight: "bold", fontSize: 15, minWidth: 60 }}>
+                              {up ? "+" : ""}{(m.movement_pct || 0).toFixed(2)}%
+                            </span>
+                            <span style={{ background: "#111", color: gColor, border: `1px solid ${gColor}44`, borderRadius: 3, fontSize: 10, padding: "1px 6px", fontWeight: "bold" }}>{g}</span>
+                            <span style={{ fontSize: 12, color: "#9ca3af", flex: 1 }}>{m.question}</span>
+                            <span style={{ fontSize: 11, color: "#555" }}>
+                              {m.price_before != null ? (m.price_before * 100).toFixed(1) : "?"} → {m.price_after != null ? (m.price_after * 100).toFixed(1) : "?"}%
+                            </span>
+                            <span style={{ fontSize: 10, color: "#374151" }}>
+                              {m.ts ? new Date(m.ts * 1000).toLocaleTimeString("fr-FR") : ""}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {activeTab === "bot" && (
               <div>
 
