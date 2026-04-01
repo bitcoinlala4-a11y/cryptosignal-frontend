@@ -152,6 +152,20 @@ a { color: inherit; text-decoration: none; }
   .dash-fg-box { display: none; }
 }
 
+/* ── News Ticker ─────────────────────────────────────────────────── */
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.news-ticker-inner {
+  display: inline-flex;
+  align-items: center;
+  animation: ticker-scroll 60s linear infinite;
+  white-space: nowrap;
+  padding-left: 12px;
+}
+.news-ticker-inner:hover { animation-play-state: paused; }
+
 /* ── Mode clair ──────────────────────────────────────────────────── */
 body.light { background: #f0f4f8 !important; color: #1a1a2e !important; }
 body.light .dash-page { background: #f0f4f8 !important; }

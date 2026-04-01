@@ -50,6 +50,8 @@ export default function Dashboard() {
   const [keyMsg, setKeyMsg] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
+  const [whales, setWhales] = useState([]);
+  const [news, setNews] = useState([]);
 
   const wsRef = useRef(null);
   const token = useRef(null);
@@ -99,6 +101,9 @@ export default function Dashboard() {
     if (sigStatsData?.byType) setSignalStats(sigStatsData);
     if (matrixData?.matrix) { setMatrix(matrixData.matrix); setMatrixTimeframes(matrixData.timeframes || []); }
     loadProfile(t);
+    // Gadgets premium (whale + news) — chargés en parallèle sans bloquer
+    fetch(`${API}/api/market/whales`).then(r => r.json()).then(d => { if (d.whales) setWhales(d.whales); }).catch(() => {});
+    fetch(`${API}/api/market/news`).then(r => r.json()).then(d => { if (d.news) setNews(d.news); }).catch(() => {});
   }
 
   async function loadProfile(t) {
@@ -234,6 +239,14 @@ export default function Dashboard() {
     return () => clearInterval(i);
   }, []);
 
+  // Whale tracker — refresh toutes les 3 min
+  useEffect(() => {
+    const i = setInterval(() => {
+      fetch(`${API}/api/market/whales`).then(r => r.json()).then(d => { if (d.whales) setWhales(d.whales); }).catch(() => {});
+    }, 3 * 60 * 1000);
+    return () => clearInterval(i);
+  }, []);
+
   // Keep-alive — ping toutes les 10 min pour garder Render éveillé
   useEffect(() => {
     const ping = () => fetch(`${API}/api/health`).catch(() => {});
@@ -289,6 +302,29 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* ── News Ticker ─────────────────────────────────────────────── */}
+        {news.length > 0 && (
+          <div style={{ background: "#060610", borderBottom: "1px solid #12122a", overflow: "hidden", height: 30, display: "flex", alignItems: "center" }}>
+            <div style={{ padding: "0 14px", background: "#7c3aed", color: "#fff", fontSize: 10, fontWeight: "bold", height: "100%", display: "flex", alignItems: "center", letterSpacing: 1, whiteSpace: "nowrap", flexShrink: 0 }}>
+              📰 LIVE
+            </div>
+            <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
+              <div className="news-ticker-inner">
+                {[...news, ...news].map((item, i) => (
+                  <a key={i} href={item.url} target="_blank" rel="noopener noreferrer"
+                    style={{ color: "#9ca3af", textDecoration: "none", fontSize: 12, whiteSpace: "nowrap", transition: "color 0.2s" }}
+                    onMouseEnter={e => e.currentTarget.style.color="#e5e7eb"}
+                    onMouseLeave={e => e.currentTarget.style.color="#9ca3af"}>
+                    <span style={{ color: "#7c3aed", marginRight: 8, fontSize: 10 }}>◆</span>
+                    {item.title}
+                    <span style={{ color: "#333", marginLeft: 12, marginRight: 24, fontSize: 10 }}>— {item.source}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div style={s.content}>
 
           {/* Signal du jour */}
@@ -318,19 +354,43 @@ export default function Dashboard() {
 
           {/* Ligne du haut : F&G + stats paires */}
           <div style={s.topRow} className="dash-toprow">
-            {/* Fear & Greed */}
-            {fearGreed && (
-              <div style={s.fgBox} className="dash-fg-box dash-card">
-                <div style={{ fontSize: 10, color: "#555", letterSpacing: 1, marginBottom: 6 }}>FEAR & GREED</div>
-                <div style={{ fontSize: 40, fontWeight: "bold", color: fearGreed.value >= 60 ? "#34d399" : fearGreed.value >= 40 ? "#fbbf24" : "#f87171", lineHeight: 1 }}>
-                  {fearGreed.value}
+            {/* Fear & Greed — jauge SVG */}
+            {fearGreed && (() => {
+              const cx = 100, cy = 82, R = 68;
+              const angle = Math.PI * (1 - fearGreed.value / 100);
+              const nx = (cx + 54 * Math.cos(angle)).toFixed(1);
+              const ny = (cy - 54 * Math.sin(angle)).toFixed(1);
+              const fgColor = fearGreed.value >= 60 ? "#22c55e" : fearGreed.value >= 40 ? "#fbbf24" : "#ef4444";
+              return (
+                <div style={{ ...s.fgBox, minWidth: 210 }} className="dash-fg-box dash-card">
+                  <div style={{ fontSize: 10, color: "#555", letterSpacing: 1, textAlign: "center", marginBottom: 2 }}>FEAR & GREED INDEX</div>
+                  <svg width="210" height="110" viewBox="0 0 210 110" style={{ display: "block", margin: "0 auto" }}>
+                    <defs>
+                      <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#ef4444" />
+                        <stop offset="25%" stopColor="#f97316" />
+                        <stop offset="50%" stopColor="#fbbf24" />
+                        <stop offset="75%" stopColor="#86efac" />
+                        <stop offset="100%" stopColor="#22c55e" />
+                      </linearGradient>
+                    </defs>
+                    {/* Arc fond */}
+                    <path d={`M ${cx-R},${cy} A ${R},${R} 0 0,1 ${cx+R},${cy}`} stroke="#1a1a2e" strokeWidth="11" fill="none" strokeLinecap="round" />
+                    {/* Arc coloré */}
+                    <path d={`M ${cx-R},${cy} A ${R},${R} 0 0,1 ${cx+R},${cy}`} stroke="url(#gaugeGrad)" strokeWidth="11" fill="none" strokeLinecap="round" />
+                    {/* Labels extrêmes */}
+                    <text x={cx-R-4} y={cy+16} textAnchor="middle" fill="#ef4444" fontSize="8" fontWeight="bold">FEAR</text>
+                    <text x={cx+R+4} y={cy+16} textAnchor="middle" fill="#22c55e" fontSize="8" fontWeight="bold">GREED</text>
+                    {/* Aiguille */}
+                    <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+                    <circle cx={cx} cy={cy} r="5" fill="white" />
+                    {/* Valeur */}
+                    <text x={cx} y={cy-12} textAnchor="middle" fill={fgColor} fontSize="18" fontWeight="bold">{fearGreed.value}</text>
+                  </svg>
+                  <div style={{ fontSize: 11, color: fgColor, textAlign: "center", fontWeight: "bold", marginTop: -8 }}>{fearGreed.label}</div>
                 </div>
-                <div style={{ fontSize: 11, color: "#9ca3af", margin: "4px 0 8px" }}>{fearGreed.label}</div>
-                <div style={{ background: "#0f0f1a", borderRadius: 3, height: 4, overflow: "hidden" }}>
-                  <div style={{ width: `${fearGreed.value}%`, height: "100%", background: `linear-gradient(90deg, #f87171, #fbbf24 50%, #34d399)` }} />
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Paires overview */}
             <div style={s.pairsGrid} className="dash-pairs-grid">
@@ -453,6 +513,72 @@ export default function Dashboard() {
                   </div>
                   <span style={{ color: "#f59e0b", fontWeight: "bold", fontSize: 13, whiteSpace: "nowrap" }}>Ouvrir Binance →</span>
                 </a>
+
+                {/* ── Whale Tracker ───────────────────────────────────── */}
+                <div style={{ marginTop: 16, background: "#0a0a1a", borderRadius: 10, border: "1px solid #1f1f35", overflow: "hidden" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderBottom: "1px solid #1f1f35" }}>
+                    <span style={{ fontSize: 16 }}>🐋</span>
+                    <div>
+                      <div style={{ fontWeight: "bold", color: "#e5e7eb", fontSize: 14 }}>Whale Tracker</div>
+                      <div style={{ fontSize: 11, color: "#555" }}>Mouvements &gt; 500 000 $ — temps réel Binance</div>
+                    </div>
+                    <div style={{ marginLeft: "auto", display: "flex", gap: 10, fontSize: 11 }}>
+                      <span style={{ color: "#34d399" }}>🟢 Vers Wallet (Bullish)</span>
+                      <span style={{ color: "#f87171" }}>🔴 Vers Exchange (Bearish)</span>
+                    </div>
+                  </div>
+                  <div style={{ position: "relative" }}>
+                    {/* Data (blurred for FREE) */}
+                    <div style={{ filter: userPlan === "free" ? "blur(5px)" : "none", pointerEvents: userPlan === "free" ? "none" : "auto" }}>
+                      {whales.length === 0 ? (
+                        <div style={{ padding: "24px 16px", textAlign: "center", color: "#444", fontSize: 13 }}>
+                          Chargement des données whale...
+                        </div>
+                      ) : (
+                        <div style={{ overflowX: "auto" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                            <thead>
+                              <tr style={{ borderBottom: "1px solid #12122a" }}>
+                                {["Direction", "Paire", "Montant", "Prix", "Quantité", "Heure"].map(h => (
+                                  <th key={h} style={{ ...s.th, background: "#060610" }}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {whales.slice(0, 5).map((w, i) => (
+                                <tr key={i} style={{ borderBottom: "1px solid #0d0d1e" }}>
+                                  <td style={{ ...s.td, fontWeight: "bold" }}>
+                                    {w.direction === "wallet"
+                                      ? <span style={{ color: "#34d399" }}>🟢 Vers Wallet</span>
+                                      : <span style={{ color: "#f87171" }}>🔴 Vers Exchange</span>}
+                                  </td>
+                                  <td style={{ ...s.td, fontWeight: "bold", color: "#e5e7eb" }}>{w.pair}</td>
+                                  <td style={{ ...s.td, fontWeight: "bold", color: "#fbbf24" }}>
+                                    ${w.notional >= 1e6 ? `${(w.notional / 1e6).toFixed(2)}M` : `${(w.notional / 1e3).toFixed(0)}K`}
+                                  </td>
+                                  <td style={{ ...s.td, fontFamily: "monospace" }}>${w.price.toLocaleString("en-US", { maximumFractionDigits: 2 })}</td>
+                                  <td style={s.td}>{w.qty.toFixed(3)}</td>
+                                  <td style={{ ...s.td, color: "#444" }}>{new Date(w.time).toLocaleTimeString("fr-FR")}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                    {/* Overlay FREE */}
+                    {userPlan === "free" && (
+                      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(7,7,17,0.6)", backdropFilter: "blur(2px)", gap: 10 }}>
+                        <span style={{ fontSize: 28 }}>🔒</span>
+                        <div style={{ fontWeight: "bold", color: "#f59e0b", fontSize: 14 }}>Accès réservé aux membres ELITE</div>
+                        <div style={{ fontSize: 12, color: "#6b7280" }}>Voir les baleines en temps réel avec le plan ELITE</div>
+                        <button onClick={() => router.push("/pricing")} style={{ marginTop: 4, padding: "8px 20px", background: "linear-gradient(135deg, #f59e0b, #d97706)", border: "none", borderRadius: 8, color: "#000", fontWeight: "bold", cursor: "pointer", fontSize: 13 }}>
+                          Passer ELITE — 15 USDT/sem →
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 
