@@ -501,19 +501,6 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                {/* Bannière Binance affiliation */}
-                <a href="https://www.binance.com/fr/activity/referral-entry/CPA?ref=CPA_00QJ7WFZCS" target="_blank" rel="noopener noreferrer"
-                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: "linear-gradient(135deg, #1a1200, #1a0f00)", border: "1px solid #f59e0b33", borderRadius: 10, padding: "14px 18px", marginTop: 14, textDecoration: "none", cursor: "pointer" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <span style={{ fontSize: 24 }}>🟡</span>
-                    <div>
-                      <div style={{ fontWeight: "bold", color: "#f59e0b", fontSize: 14 }}>Tradez ces signaux sur Binance</div>
-                      <div style={{ fontSize: 12, color: "#9ca3af" }}>-20% sur vos frais de trading avec notre lien partenaire</div>
-                    </div>
-                  </div>
-                  <span style={{ color: "#f59e0b", fontWeight: "bold", fontSize: 13, whiteSpace: "nowrap" }}>Ouvrir Binance →</span>
-                </a>
-
                 {/* ── Whale Tracker ───────────────────────────────────── */}
                 <div style={{ marginTop: 16, background: "#0a0a1a", borderRadius: 10, border: "1px solid #1f1f35", overflow: "hidden" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderBottom: "1px solid #1f1f35" }}>

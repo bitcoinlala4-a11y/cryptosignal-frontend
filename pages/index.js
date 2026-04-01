@@ -219,11 +219,6 @@ export default function Home() {
             </div>
           )}
 
-          {/* Bannière urgence */}
-          <div className="urgency-banner" style={{ background: "linear-gradient(90deg, #7c3aed, #4f46e5, #7c3aed)", padding: "10px 24px", textAlign: "center", fontSize: 14, fontWeight: "bold", color: "#fff", letterSpacing: 0.3 }}>
-            🔥 Offre de lancement : <span style={{ color: "#fbbf24" }}>-50% sur votre première semaine PRO</span> — Utilisez le code <span style={{ background: "rgba(255,255,255,0.2)", padding: "2px 8px", borderRadius: 4, fontFamily: "monospace" }}>LAUNCH50</span>
-          </div>
-
           {/* Nav */}
           <nav style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 48px", backdropFilter: "blur(10px)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -354,6 +349,7 @@ export default function Home() {
                 { icon: "📊", title: "Score de Confiance Algorithmique", desc: "Chaque signal est noté de 0 à 100. Seules les opportunités dépassant le seuil de viabilité vous sont transmises.", color: "#a78bfa" },
                 { icon: "💧", title: "Analyse de Flux de Liquidité", desc: "Détection des zones de liquidité et des pics de volume anormaux qui précèdent les grands mouvements directionnels.", color: "#f97316" },
                 { icon: "🎯", title: "Niveaux de Sortie Calculés", desc: "Chaque signal intègre un niveau de protection et un objectif de profit optimisés selon la volatilité actuelle du marché.", color: "#60a5fa" },
+                { icon: "🐋", title: "Whale Tracker en Temps Réel", desc: "Détectez les mouvements des baleines : chaque transaction >500 000$ sur Binance est analysée et catégorisée (accumulation ou distribution). Réservé ELITE.", color: "#22d3ee" },
                 { icon: "🔒", title: "Sans engagement", desc: "Accès gratuit immédiat. Plans hebdomadaires en USDT. Annulation à tout moment. Zéro frais cachés.", color: "#818cf8" },
               ].map((f) => (
                 <div key={f.title} className="feature-card" style={{ background: "rgba(26,26,46,0.7)", backdropFilter: "blur(8px)", borderRadius: 14, padding: "22px 20px", border: "1px solid #2d2d4e" }}>
@@ -371,8 +367,8 @@ export default function Home() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
               {[
                 { plan: "Free", price: "0 USDT", period: "", color: "#9ca3af", badge: null, features: ["5 signaux/jour", "BTC & ETH uniquement", "Données différées (30 min)", "Score de confiance visible"], cta: "Commencer gratuitement" },
-                { plan: "Pro", price: "7 USDT", period: "/ semaine", color: "#a78bfa", badge: "🔥 -50% ce lancement", features: ["Signaux illimités temps réel", "6 paires (BTC/ETH/BNB/SOL/DOGE/AVAX)", "Tous les timeframes (5m→4h)", "Alertes Telegram instantanées", "Matrice de confluence multi-TF", "Score de Confiance Algorithmique"], cta: "Démarrer Pro", highlight: true },
-                { plan: "Elite", price: "15 USDT", period: "/ semaine", color: "#fbbf24", badge: "👑 Accès total", features: ["Tout Pro inclus", "Timeframe 1D", "Signaux PancakeSwap (pépites)", "Détection de tendance institutionnelle", "Support prioritaire 24h", "Bot de trading automatisé"], cta: "Devenir Elite" },
+                { plan: "Pro", price: "7 USDT", period: "/ semaine", color: "#a78bfa", badge: "⚡ Le plus populaire", features: ["Signaux illimités temps réel", "6 paires (BTC/ETH/BNB/SOL/DOGE/AVAX)", "Tous les timeframes (5m→4h)", "Alertes Telegram instantanées", "Matrice de confluence multi-TF", "Score de Confiance Algorithmique"], cta: "Démarrer Pro", highlight: true },
+                { plan: "Elite", price: "15 USDT", period: "/ semaine", color: "#fbbf24", badge: "👑 Accès total", features: ["Tout Pro inclus", "Timeframe 1D", "Whale Tracker temps réel", "Signaux PancakeSwap (pépites)", "Détection de tendance institutionnelle", "Support prioritaire 24h", "Bot de trading automatisé"], cta: "Devenir Elite" },
               ].map((p) => (
                 <div key={p.plan} style={{ background: p.highlight ? "linear-gradient(135deg, rgba(124,58,237,0.2), rgba(79,70,229,0.1))" : "rgba(26,26,46,0.7)", backdropFilter: "blur(8px)", borderRadius: 16, padding: "28px 24px", border: p.highlight ? "1px solid rgba(124,58,237,0.5)" : "1px solid #2d2d4e", textAlign: "center", position: "relative" }}>
                   {p.badge && <div style={{ position: "absolute", top: -12, left: "50%", transform: "translateX(-50%)", background: p.highlight ? "#7c3aed" : "#f59e0b", color: "#fff", fontSize: 11, fontWeight: "bold", padding: "3px 12px", borderRadius: 20, whiteSpace: "nowrap" }}>{p.badge}</div>}
