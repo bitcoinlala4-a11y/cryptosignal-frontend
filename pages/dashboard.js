@@ -717,97 +717,135 @@ export default function Dashboard() {
           </div>)}
 
           {/* Signaux */}
-          {activeTab === "signals" && (
-              <div>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16, alignItems: "center" }}>
-                  {allowedTimeframes.map(tf => (
-                    <button key={tf} onClick={() => loadSignalsByTimeframe(tf)} style={{ padding: "5px 14px", borderRadius: 2, border: "none", cursor: "pointer", fontSize: 12, fontWeight: selectedTimeframe === tf ? "bold" : "normal", background: selectedTimeframe === tf ? "#7c3aed" : "#080810", color: selectedTimeframe === tf ? "#fff" : "#666" }}>
-                      {tf}
-                    </button>
-                  ))}
-                  {userPlan === "free" && <span style={{ fontSize: 11, color: "#7c3aed", cursor: "pointer" }} onClick={() => router.push("/pricing")}>+ 5m 15m 30m 2h 4h (Pro)</span>}
-                </div>
-
-                {signals.length === 0 ? (
-                  <p style={{ color: "#444", fontSize: 13, textAlign: "center", padding: 40 }}>En attente des premiers signaux ({selectedTimeframe})...</p>
-                ) : (
-                  <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                      <thead>
-                        <tr style={{ borderBottom: "1px solid #1f1f35" }}>
-                          {["Heure", "Paire", "TF", "Signal", "Direction", "Conf.", "Entrée", "Stop-Loss", "Take-Profit", "R/R", "Résultat", "PnL"].map(h => (
-                            <th key={h} style={s.th}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {signals.map((sig, i) => {
-                          const entry = parseFloat(sig.price || sig.price_at_signal || 0);
-                          const sl = parseFloat(sig.stop_loss || 0);
-                          const tp = parseFloat(sig.take_profit || 0);
-                          const rr = sl && tp && entry ? (Math.abs(tp - entry) / Math.abs(sl - entry)).toFixed(1) : null;
-                          return (
-                            <tr key={sig.id || i} style={{ borderBottom: "1px solid #151525", transition: "background 0.2s" }}
-                              onMouseEnter={e => e.currentTarget.style.background = "#12121e"}
-                              onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                              <td style={s.td}>{new Date(sig.created_at || sig.createdAt).toLocaleTimeString("fr-FR")}</td>
-                              <td style={{ ...s.td, fontWeight: "bold", color: PAIR_COLORS[sig.pair?.replace("USDT", "")] || "#a78bfa" }}>
-                                {sig.pair?.replace("USDT", "")}
-                              </td>
-                              <td style={{ ...s.td, color: "#444", fontSize: 11 }}>{sig.timeframe || "5m"}</td>
-                              <td style={{ ...s.td, color: "#9ca3af" }}>
-                                {(sig.type || "").toUpperCase()}
-                                {sig.volume_spike && <span style={{ marginLeft: 4, fontSize: 10 }}>🔥</span>}
-                              </td>
-                              <td style={{ ...s.td, color: sig.direction === "long" ? "#00c98d" : "#ff4d4d", fontWeight: "bold" }}>
-                                {sig.direction === "long" ? "▲ LONG" : "▼ SHORT"}
-                              </td>
-                              <td style={s.td}>
-                                {sig.confidence != null ? (() => {
-                                  const pct = Math.round(sig.confidence * 100);
-                                  const isHigh = pct >= 80;
-                                  return (
-                                    <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 90 }}>
-                                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                        <div style={{ flex: 1, height: 4, background: "#080810", borderRadius: 2, overflow: "hidden" }}>
-                                          <div style={{ width: `${pct}%`, height: "100%", background: pct >= 80 ? "#00c98d" : pct >= 60 ? "#a78bfa" : "#fbbf24", borderRadius: 2 }} />
-                                        </div>
-                                        <span style={{ fontSize: 11, color: pct >= 80 ? "#00c98d" : "#9ca3af", fontWeight: "bold" }}>{pct}%</span>
-                                      </div>
-                                      {isHigh && <span style={{ fontSize: 9, fontWeight: "bold", color: "#00c98d", textShadow: "0 0 6px #00c98d88", letterSpacing: 0.3 }}>⚡ HAUTE PROBABILITÉ</span>}
-                                    </div>
-                                  );
-                                })() : "—"}
-                              </td>
-                              <td style={{ ...s.td, color: "#fff", fontFamily: "monospace" }}>
-                                ${entry.toLocaleString("en-US", { maximumFractionDigits: 2 })}
-                              </td>
-                              <td style={{ ...s.td, color: "#ff4d4d", fontFamily: "monospace" }}>
-                                {sl ? `$${sl.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : "—"}
-                              </td>
-                              <td style={{ ...s.td, color: "#00c98d", fontFamily: "monospace" }}>
-                                {tp ? `$${tp.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : "—"}
-                              </td>
-                              <td style={{ ...s.td, color: rr && parseFloat(rr) >= 1.5 ? "#00c98d" : "#fbbf24" }}>
-                                {rr ? `1:${rr}` : "—"}
-                              </td>
-                              <td style={{ ...s.td }}>
-                                <span style={{ padding: "2px 8px", borderRadius: 2, fontSize: 11, fontWeight: "bold", background: sig.result === "win" ? "#0d2818" : sig.result === "loss" ? "#2a0f0f" : "#1f1f2e", color: sig.result === "win" ? "#00c98d" : sig.result === "loss" ? "#ff4d4d" : "#555" }}>
-                                  {sig.result === "win" ? "✓ WIN" : sig.result === "loss" ? "✗ LOSS" : "⏳"}
-                                </span>
-                              </td>
-                              <td style={{ ...s.td, color: sig.pnl_pct != null && sig.pnl_pct >= 0 ? "#00c98d" : "#ff4d4d", fontWeight: "bold" }}>
-                                {sig.pnl_pct != null ? `${sig.pnl_pct >= 0 ? "+" : ""}${parseFloat(sig.pnl_pct).toFixed(2)}%` : "—"}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+          {activeTab === "signals" && (() => {
+            const wins   = signals.filter(s => s.result === "win").length;
+            const losses = signals.filter(s => s.result === "loss").length;
+            const done   = wins + losses;
+            const wr     = done > 0 ? Math.round(wins / done * 100) : null;
+            const pending = signals.filter(s => !s.result).length;
+            return (
+            <div>
+              {/* Stats rapides */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                <div style={{ flex: 1, background: "#080810", border: "1px solid #12121e", borderRadius: 3, padding: "12px 16px", textAlign: "center" }}>
+                  <div style={{ fontSize: 9, color: "#374151", fontWeight: "700", letterSpacing: 1, marginBottom: 4 }}>WIN RATE</div>
+                  <div style={{ fontSize: 28, fontWeight: "700", fontFamily: MONO, color: wr >= 60 ? "#00c98d" : wr >= 45 ? "#f59e0b" : wr != null ? "#ff4d4d" : "#374151" }}>
+                    {wr != null ? `${wr}%` : "—"}
                   </div>
+                  <div style={{ fontSize: 10, color: "#374151", marginTop: 2 }}>{done} évalués</div>
+                </div>
+                <div style={{ flex: 1, background: "#080810", border: "1px solid #12121e", borderRadius: 3, padding: "12px 16px", textAlign: "center" }}>
+                  <div style={{ fontSize: 9, color: "#374151", fontWeight: "700", letterSpacing: 1, marginBottom: 4 }}>TOTAL SIGNAUX</div>
+                  <div style={{ fontSize: 28, fontWeight: "700", fontFamily: MONO, color: "#a78bfa" }}>{signals.length}</div>
+                  <div style={{ fontSize: 10, color: "#374151", marginTop: 2 }}>{pending} en cours</div>
+                </div>
+                <div style={{ flex: 1, background: "#080810", border: "1px solid #12121e", borderRadius: 3, padding: "12px 16px", textAlign: "center" }}>
+                  <div style={{ fontSize: 9, color: "#374151", fontWeight: "700", letterSpacing: 1, marginBottom: 4 }}>GAGNANTS</div>
+                  <div style={{ fontSize: 28, fontWeight: "700", fontFamily: MONO, color: "#00c98d" }}>{wins}</div>
+                  <div style={{ fontSize: 10, color: "#374151", marginTop: 2 }}>{losses} perdants</div>
+                </div>
+              </div>
+
+              {/* Filtre timeframe */}
+              <div style={{ display: "flex", gap: 6, marginBottom: 14, alignItems: "center" }}>
+                <span style={{ fontSize: 10, color: "#374151", fontWeight: "700", letterSpacing: 1 }}>TIMEFRAME</span>
+                {allowedTimeframes.map(tf => (
+                  <button key={tf} onClick={() => loadSignalsByTimeframe(tf)} style={{ padding: "4px 12px", borderRadius: 2, border: `1px solid ${selectedTimeframe === tf ? "#7c3aed" : "#12121e"}`, cursor: "pointer", fontSize: 11, fontWeight: "700", background: selectedTimeframe === tf ? "#7c3aed" : "transparent", color: selectedTimeframe === tf ? "#fff" : "#4b5563", fontFamily: MONO }}>
+                    {tf}
+                  </button>
+                ))}
+                {userPlan === "free" && (
+                  <span style={{ fontSize: 11, color: "#7c3aed44", cursor: "pointer", fontFamily: MONO }} onClick={() => router.push("/pricing")}>
+                    + 5m 15m 30m 2h 4h →
+                  </span>
                 )}
               </div>
-            )}
+
+              {/* Cartes signaux */}
+              {signals.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "48px 0", color: "#374151", fontSize: 13 }}>
+                  <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
+                  En attente des premiers signaux — {selectedTimeframe}
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {signals.map((sig, i) => {
+                    const isLong   = sig.direction === "long";
+                    const pct      = sig.confidence != null ? Math.round(sig.confidence * 100) : null;
+                    const dirColor = isLong ? "#00c98d" : "#ff4d4d";
+                    const pair     = sig.pair?.replace("USDT", "") || "?";
+                    const isWin    = sig.result === "win";
+                    const isLoss   = sig.result === "loss";
+                    const isPending = !sig.result;
+                    const minutesAgo = sig.created_at ? Math.round((Date.now() - new Date(sig.created_at)) / 60000) : null;
+                    const timeLabel  = minutesAgo != null ? (minutesAgo < 60 ? `${minutesAgo}m` : `${Math.floor(minutesAgo/60)}h${minutesAgo%60 ? (minutesAgo%60)+'m' : ''}`) : "";
+                    return (
+                      <div key={sig.id || i} style={{
+                        display: "flex", alignItems: "center", gap: 16,
+                        background: "#080810", border: "1px solid #12121e",
+                        borderLeft: `3px solid ${dirColor}`,
+                        borderRadius: 3, padding: "12px 16px",
+                        transition: "background 0.15s",
+                      }}
+                        onMouseEnter={e => e.currentTarget.style.background = "#0d0d1a"}
+                        onMouseLeave={e => e.currentTarget.style.background = "#080810"}>
+
+                        {/* Paire */}
+                        <div style={{ minWidth: 52 }}>
+                          <div style={{ fontSize: 16, fontWeight: "700", color: PAIR_COLORS[pair] || "#e2e8f0", fontFamily: MONO }}>{pair}</div>
+                          <div style={{ fontSize: 10, color: "#374151", fontFamily: MONO }}>{sig.timeframe || "1h"}</div>
+                        </div>
+
+                        {/* Direction — élément central */}
+                        <div style={{ minWidth: 90 }}>
+                          <div style={{ fontSize: 18, fontWeight: "700", color: dirColor, fontFamily: MONO, letterSpacing: 0.5 }}>
+                            {isLong ? "▲ LONG" : "▼ SHORT"}
+                          </div>
+                          {pct >= 80 && <div style={{ fontSize: 9, color: "#00c98d", fontWeight: "700", letterSpacing: 0.5, marginTop: 2 }}>● FORT</div>}
+                        </div>
+
+                        {/* Confiance */}
+                        {pct != null && (
+                          <div style={{ flex: 1, maxWidth: 140 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                              <span style={{ fontSize: 10, color: "#374151", fontWeight: "700" }}>CONFIANCE</span>
+                              <span style={{ fontSize: 12, fontWeight: "700", fontFamily: MONO, color: pct >= 70 ? "#00c98d" : pct >= 55 ? "#f59e0b" : "#ff4d4d" }}>{pct}%</span>
+                            </div>
+                            <div style={{ height: 4, background: "#0d0d1a", borderRadius: 2, overflow: "hidden" }}>
+                              <div style={{ width: `${pct}%`, height: "100%", background: pct >= 70 ? "#00c98d" : pct >= 55 ? "#f59e0b" : "#ff4d4d", transition: "width 0.4s" }} />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* PnL si disponible */}
+                        {sig.pnl_pct != null && (
+                          <div style={{ minWidth: 60, textAlign: "right" }}>
+                            <div style={{ fontSize: 16, fontWeight: "700", fontFamily: MONO, color: sig.pnl_pct >= 0 ? "#00c98d" : "#ff4d4d" }}>
+                              {sig.pnl_pct >= 0 ? "+" : ""}{parseFloat(sig.pnl_pct).toFixed(1)}%
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Résultat */}
+                        <div style={{ minWidth: 70, textAlign: "right" }}>
+                          <span style={{
+                            display: "inline-block", padding: "4px 10px", borderRadius: 2, fontSize: 11, fontWeight: "700", letterSpacing: 0.5,
+                            background: isWin ? "#0d2818" : isLoss ? "#2a0f0f" : "#0d0d1a",
+                            color: isWin ? "#00c98d" : isLoss ? "#ff4d4d" : "#374151",
+                            border: `1px solid ${isWin ? "#00c98d22" : isLoss ? "#ff4d4d22" : "#1f1f35"}`,
+                          }}>
+                            {isWin ? "WIN" : isLoss ? "LOSS" : "EN COURS"}
+                          </span>
+                          {timeLabel && <div style={{ fontSize: 9, color: "#374151", marginTop: 4, fontFamily: MONO }}>{timeLabel}</div>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            );
+          })()}
 
             {/* Matrice */}
             {activeTab === "matrix" && userPlan !== "free" && (
