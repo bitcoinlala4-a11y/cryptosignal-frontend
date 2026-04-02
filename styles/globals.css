@@ -1,13 +1,17 @@
 :root {
-  --background: #0f0f1a;
-  --foreground: #ffffff;
+  --background: #050507;
+  --foreground: #c9d1d9;
+  --accent: #7c3aed;
+  --green: #00c98d;
+  --red: #ff4d4d;
+  --mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
 }
 
 html, body {
   max-width: 100vw;
   overflow-x: hidden;
-  background: #0f0f1a;
-  color: #fff;
+  background: #050507;
+  color: #c9d1d9;
 }
 
 * {
@@ -17,10 +21,26 @@ html, body {
 }
 
 body {
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* Scrollbar terminal */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: #07070e; }
+::-webkit-scrollbar-thumb { background: #1a1a2e; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #7c3aed; }
+
+/* Inputs & selects */
+input, select, textarea {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  outline: none;
+}
+input:focus, select:focus {
+  border-color: #7c3aed !important;
+}
+option { background: #07070e; color: #c9d1d9; }
 
 a { color: inherit; text-decoration: none; }
 

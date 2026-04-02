@@ -350,6 +350,7 @@ export default function Home() {
                 { icon: "💧", title: "Analyse de Flux de Liquidité", desc: "Détection des zones de liquidité et des pics de volume anormaux qui précèdent les grands mouvements directionnels.", color: "#f97316" },
                 { icon: "🎯", title: "Niveaux de Sortie Calculés", desc: "Chaque signal intègre un niveau de protection et un objectif de profit optimisés selon la volatilité actuelle du marché.", color: "#60a5fa" },
                 { icon: "🐋", title: "Whale Tracker en Temps Réel", desc: "Détectez les mouvements des baleines : chaque transaction >500 000$ sur Binance est analysée et catégorisée (accumulation ou distribution). Réservé ELITE.", color: "#22d3ee" },
+                { icon: "🎯", title: "Arbitrage Polymarket", desc: "Détection automatique d'écarts de prix entre Polymarket et Manifold Markets. Scans toutes les 10 min, signal FORT/MODÉRÉ/FAIBLE, cross-marché et interne. Actif 24h/24.", color: "#e879f9" },
                 { icon: "🔒", title: "Sans engagement", desc: "Accès gratuit immédiat. Plans hebdomadaires en USDT. Annulation à tout moment. Zéro frais cachés.", color: "#818cf8" },
               ].map((f) => (
                 <div key={f.title} className="feature-card" style={{ background: "rgba(26,26,46,0.7)", backdropFilter: "blur(8px)", borderRadius: 14, padding: "22px 20px", border: "1px solid #2d2d4e" }}>
@@ -358,6 +359,78 @@ export default function Home() {
                   <p style={{ color: "#6b7280", fontSize: 13, margin: 0, lineHeight: 1.65 }}>{f.desc}</p>
                 </div>
               ))}
+            </div>
+          </section>
+
+          {/* ── Polymarket Section ─────────────────────────────────────── */}
+          <section style={{ padding: "0 40px 80px", maxWidth: 1100, margin: "0 auto" }}>
+            <div style={{ textAlign: "center", marginBottom: 40 }}>
+              <div style={{ display: "inline-block", background: "rgba(232,121,249,0.1)", border: "1px solid #e879f944", borderRadius: 4, padding: "4px 14px", fontSize: 11, fontWeight: "bold", color: "#e879f9", letterSpacing: 2, marginBottom: 14 }}>
+                NOUVEAU · ARBITRAGE PRÉDICTIF
+              </div>
+              <h2 style={{ fontSize: 30, fontWeight: 800, margin: "0 0 12px" }}>
+                Outil <span style={{ color: "#e879f9" }}>Polymarket</span>
+              </h2>
+              <p style={{ color: "#6b7280", fontSize: 15, maxWidth: 560, margin: "0 auto" }}>
+                Détectez les écarts de probabilité entre Polymarket et Manifold Markets avant que le marché ne se rééquilibre. Scanner automatique toutes les 10 minutes.
+              </p>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+              {/* Left: How it works */}
+              <div style={{ background: "rgba(15,10,30,0.8)", borderRadius: 8, border: "1px solid #2d2d4e", padding: "28px 28px" }}>
+                <h3 style={{ margin: "0 0 20px", fontSize: 16, color: "#e2e8f0" }}>Comment ça marche</h3>
+                {[
+                  { step: "01", title: "Scan toutes les 10 min", desc: "Notre bot analyse les marchés Polymarket actifs — probabilités, liquidités, spreads." },
+                  { step: "02", title: "Cross-matching Manifold", desc: "Comparaison automatique avec les marchés équivalents sur Manifold Markets." },
+                  { step: "03", title: "Détection d'écarts", desc: "Tout écart ≥ 3% est signalé avec score FORT/MODÉRÉ/FAIBLE et direction d'arbitrage." },
+                  { step: "04", title: "Signal actionnable", desc: "Vous voyez le gap %, les probabilités des deux plateformes et un lien direct vers l'event." },
+                ].map(item => (
+                  <div key={item.step} style={{ display: "flex", gap: 14, marginBottom: 16 }}>
+                    <div style={{ flexShrink: 0, width: 32, height: 32, borderRadius: 2, background: "rgba(232,121,249,0.1)", border: "1px solid #e879f944", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: "bold", color: "#e879f9", fontFamily: "monospace" }}>{item.step}</div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: "bold", color: "#e2e8f0", marginBottom: 3 }}>{item.title}</div>
+                      <div style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.5 }}>{item.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Right: Signal preview */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ background: "rgba(15,10,30,0.8)", borderRadius: 8, border: "1px solid #ef444433", padding: "18px 20px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                    <span style={{ background: "#1a0003", color: "#ef4444", border: "1px solid #ef444444", borderRadius: 2, fontSize: 10, fontWeight: "bold", padding: "2px 8px" }}>🔴 FORT</span>
+                    <span style={{ color: "#ef4444", fontSize: 16, fontWeight: "bold", fontFamily: "monospace" }}>8.4%</span>
+                    <span style={{ fontSize: 10, color: "#6b7280", background: "#111", padding: "2px 8px", borderRadius: 2 }}>CROSS-MARCHÉ</span>
+                  </div>
+                  <p style={{ margin: "0 0 8px", fontSize: 13, color: "#d1d5db" }}>Will the Fed cut rates in Q3 2025?</p>
+                  <div style={{ display: "flex", gap: 16, fontSize: 12, color: "#9ca3af" }}>
+                    <span>Poly <strong style={{ color: "#e2e8f0" }}>34.1%</strong></span>
+                    <span>Manifold <strong style={{ color: "#e2e8f0" }}>42.5%</strong></span>
+                    <span style={{ color: "#00c98d" }}>▲ POLY SOUS-ÉVALUÉ</span>
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 11, color: "#4b5563" }}>Score 82/100 · Liq $12.4k · Spread 1.8%</div>
+                </div>
+
+                <div style={{ background: "rgba(15,10,30,0.8)", borderRadius: 8, border: "1px solid #f59e0b33", padding: "18px 20px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                    <span style={{ background: "#120c00", color: "#f59e0b", border: "1px solid #f59e0b44", borderRadius: 2, fontSize: 10, fontWeight: "bold", padding: "2px 8px" }}>🟡 MODÉRÉ</span>
+                    <span style={{ color: "#f59e0b", fontSize: 16, fontWeight: "bold", fontFamily: "monospace" }}>4.7%</span>
+                    <span style={{ fontSize: 10, color: "#6b7280", background: "#111", padding: "2px 8px", borderRadius: 2 }}>ARBITRAGE INTERNE</span>
+                  </div>
+                  <p style={{ margin: "0 0 8px", fontSize: 13, color: "#d1d5db" }}>Bitcoin above $100k before Dec 2025</p>
+                  <div style={{ fontSize: 11, color: "#4b5563" }}>Score 51/100 · Liq $8.1k · Spread 3.2%</div>
+                </div>
+
+                <div style={{ background: "rgba(15,10,30,0.6)", borderRadius: 8, border: "1px solid #7c3aed33", padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontSize: 11, color: "#6b7280" }}>Accès complet aux signaux Polymarket avec un compte Pro ou Elite</span>
+                  <button className="cta-btn" style={{ flexShrink: 0, padding: "7px 16px", background: "#7c3aed", border: "none", borderRadius: 4, color: "#fff", fontWeight: "bold", cursor: "pointer", fontSize: 12 }}
+                    onClick={() => { setMode("register"); setShowAuth(true); }}>
+                    Essayer
+                  </button>
+                </div>
+              </div>
             </div>
           </section>
 
