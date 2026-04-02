@@ -716,133 +716,220 @@ export default function Dashboard() {
               </div>
           </div>)}
 
-          {/* Signaux */}
+          {/* ── TRADE ROOM ─────────────────────────────────────────────── */}
           {activeTab === "signals" && (() => {
-            const wins   = signals.filter(s => s.result === "win").length;
-            const losses = signals.filter(s => s.result === "loss").length;
-            const done   = wins + losses;
-            const wr     = done > 0 ? Math.round(wins / done * 100) : null;
-            const pending = signals.filter(s => !s.result).length;
-            return (
-            <div>
-              {/* Stats rapides */}
-              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-                <div style={{ flex: 1, background: "#080810", border: "1px solid #12121e", borderRadius: 3, padding: "12px 16px", textAlign: "center" }}>
-                  <div style={{ fontSize: 9, color: "#374151", fontWeight: "700", letterSpacing: 1, marginBottom: 4 }}>WIN RATE</div>
-                  <div style={{ fontSize: 28, fontWeight: "700", fontFamily: MONO, color: wr >= 60 ? "#00c98d" : wr >= 45 ? "#f59e0b" : wr != null ? "#ff4d4d" : "#374151" }}>
-                    {wr != null ? `${wr}%` : "—"}
-                  </div>
-                  <div style={{ fontSize: 10, color: "#374151", marginTop: 2 }}>{done} évalués</div>
-                </div>
-                <div style={{ flex: 1, background: "#080810", border: "1px solid #12121e", borderRadius: 3, padding: "12px 16px", textAlign: "center" }}>
-                  <div style={{ fontSize: 9, color: "#374151", fontWeight: "700", letterSpacing: 1, marginBottom: 4 }}>TOTAL SIGNAUX</div>
-                  <div style={{ fontSize: 28, fontWeight: "700", fontFamily: MONO, color: "#a78bfa" }}>{signals.length}</div>
-                  <div style={{ fontSize: 10, color: "#374151", marginTop: 2 }}>{pending} en cours</div>
-                </div>
-                <div style={{ flex: 1, background: "#080810", border: "1px solid #12121e", borderRadius: 3, padding: "12px 16px", textAlign: "center" }}>
-                  <div style={{ fontSize: 9, color: "#374151", fontWeight: "700", letterSpacing: 1, marginBottom: 4 }}>GAGNANTS</div>
-                  <div style={{ fontSize: 28, fontWeight: "700", fontFamily: MONO, color: "#00c98d" }}>{wins}</div>
-                  <div style={{ fontSize: 10, color: "#374151", marginTop: 2 }}>{losses} perdants</div>
+            // ── Helpers ──────────────────────────────────────────────
+            function explainSignal(sig) {
+              const pair = (sig.pair || "").replace("USDT","");
+              const isLong = sig.direction === "long";
+              const pct = Math.round((sig.confidence || 0) * 100);
+              const type = sig.type || "rsi";
+              const item = overview.find(o => o.pair === pair) || {};
+              const chg  = parseFloat(item.change || 0);
+              const map  = {
+                rsi:      { long: `${pair} atteint une zone de survente sur le RSI — signal de rebond classique à fort potentiel.`, short: `Le RSI de ${pair} signale une zone de surachat. Un repli est attendu.` },
+                ema:      { long: `${pair} franchit sa moyenne mobile à la hausse. Le momentum haussier s'accélère.`, short: `${pair} repasse sous sa moyenne mobile. Retournement baissier en cours.` },
+                macd:     { long: `Croisement MACD haussier sur ${pair}. Le momentum acheteur prend le dessus.`, short: `Croisement MACD baissier sur ${pair}. La pression vendeuse domine.` },
+                momentum: { long: `Le momentum de ${pair} s'emballe à la hausse avec accélération du volume.`, short: `Le momentum de ${pair} se retourne. La pression vendeuse augmente.` },
+              };
+              let base = map[type]?.[isLong ? "long" : "short"] || `Signal ${type.toUpperCase()} ${isLong ? "haussier" : "baissier"} détecté sur ${pair}.`;
+              if (pct >= 80) base += " Plusieurs indicateurs convergent — confiance élevée.";
+              if (sig.volume_spike) base += " Pic de volume détecté, confirme le signal.";
+              if (Math.abs(chg) > 1.5) base += ` ${pair} affiche ${chg >= 0 ? "+" : ""}${chg}% sur la journée.`;
+              return base;
+            }
+            // ── Data ─────────────────────────────────────────────────
+            const pending  = signals.filter(s => !s.result);
+            const resolved = signals.filter(s => s.result);
+            const best     = [...pending].sort((a,b) => (b.confidence||0)-(a.confidence||0))[0] || signals[0];
+            const queue    = pending.filter(s => s !== best).slice(0,4);
+            const wins     = signals.filter(s => s.result === "win").length;
+            const losses   = signals.filter(s => s.result === "loss").length;
+            const done     = wins + losses;
+            const wr = done > 0 ? Math.round(wins / done * 100) : null;
+            const streak = resolved.slice(-8).reverse();
+            // Sentiment global
+            const bullishPairs = overview.filter(o => parseFloat(o.change || 0) > 0).length;
+            const sentiment = fearGreed
+              ? fearGreed.value >= 60 ? "HAUSSIER" : fearGreed.value >= 40 ? "NEUTRE" : "BAISSIER"
+              : bullishPairs >= 3 ? "HAUSSIER" : bullishPairs <= 1 ? "BAISSIER" : "NEUTRE";
+            const sentColor = sentiment === "HAUSSIER" ? "#00c98d" : sentiment === "BAISSIER" ? "#ff4d4d" : "#f59e0b";
+            const whalesBullish = whales.filter(w => w.direction === "wallet").length;
+            const whalesBearish = whales.filter(w => w.direction === "exchange").length;
+
+            if (signals.length === 0) return (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 20px", gap: 12 }}>
+                <div style={{ fontSize: 11, color: "#374151", fontWeight: "700", letterSpacing: 2 }}>TRADE ROOM</div>
+                <div style={{ fontSize: 13, color: "#4b5563" }}>En attente d'opportunités — analyse du marché en cours...</div>
+                <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                  {allowedTimeframes.map(tf => (
+                    <button key={tf} onClick={() => loadSignalsByTimeframe(tf)} style={{ padding: "4px 12px", borderRadius: 2, border: `1px solid ${selectedTimeframe === tf ? "#7c3aed" : "#12121e"}`, cursor: "pointer", fontSize: 11, background: selectedTimeframe === tf ? "#7c3aed" : "transparent", color: selectedTimeframe === tf ? "#fff" : "#4b5563", fontFamily: MONO }}>
+                      {tf}
+                    </button>
+                  ))}
                 </div>
               </div>
+            );
 
-              {/* Filtre timeframe */}
-              <div style={{ display: "flex", gap: 6, marginBottom: 14, alignItems: "center" }}>
-                <span style={{ fontSize: 10, color: "#374151", fontWeight: "700", letterSpacing: 1 }}>TIMEFRAME</span>
+            return (
+            <div>
+              {/* ── Timeframe + titre ─────────────────────────── */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                <span style={{ fontSize: 10, color: "#4b5563", fontWeight: "700", letterSpacing: 1.5 }}>TRADE ROOM</span>
+                <span style={{ color: "#1f2937" }}>·</span>
                 {allowedTimeframes.map(tf => (
-                  <button key={tf} onClick={() => loadSignalsByTimeframe(tf)} style={{ padding: "4px 12px", borderRadius: 2, border: `1px solid ${selectedTimeframe === tf ? "#7c3aed" : "#12121e"}`, cursor: "pointer", fontSize: 11, fontWeight: "700", background: selectedTimeframe === tf ? "#7c3aed" : "transparent", color: selectedTimeframe === tf ? "#fff" : "#4b5563", fontFamily: MONO }}>
+                  <button key={tf} onClick={() => loadSignalsByTimeframe(tf)} style={{ padding: "3px 10px", borderRadius: 2, border: `1px solid ${selectedTimeframe === tf ? "#7c3aed" : "#12121e"}`, cursor: "pointer", fontSize: 11, fontWeight: "700", background: selectedTimeframe === tf ? "#7c3aed" : "transparent", color: selectedTimeframe === tf ? "#fff" : "#4b5563", fontFamily: MONO }}>
                     {tf}
                   </button>
                 ))}
-                {userPlan === "free" && (
-                  <span style={{ fontSize: 11, color: "#7c3aed44", cursor: "pointer", fontFamily: MONO }} onClick={() => router.push("/pricing")}>
-                    + 5m 15m 30m 2h 4h →
-                  </span>
-                )}
+                {userPlan === "free" && <span style={{ fontSize: 10, color: "#7c3aed66", fontFamily: MONO, cursor: "pointer" }} onClick={() => router.push("/pricing")}>+5m 15m 30m →</span>}
               </div>
 
-              {/* Cartes signaux */}
-              {signals.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "48px 0", color: "#374151", fontSize: 13 }}>
-                  <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
-                  En attente des premiers signaux — {selectedTimeframe}
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {signals.map((sig, i) => {
-                    const isLong   = sig.direction === "long";
-                    const pct      = sig.confidence != null ? Math.round(sig.confidence * 100) : null;
-                    const dirColor = isLong ? "#00c98d" : "#ff4d4d";
-                    const pair     = sig.pair?.replace("USDT", "") || "?";
-                    const isWin    = sig.result === "win";
-                    const isLoss   = sig.result === "loss";
-                    const isPending = !sig.result;
-                    const minutesAgo = sig.created_at ? Math.round((Date.now() - new Date(sig.created_at)) / 60000) : null;
-                    const timeLabel  = minutesAgo != null ? (minutesAgo < 60 ? `${minutesAgo}m` : `${Math.floor(minutesAgo/60)}h${minutesAgo%60 ? (minutesAgo%60)+'m' : ''}`) : "";
-                    return (
-                      <div key={sig.id || i} style={{
-                        display: "flex", alignItems: "center", gap: 16,
-                        background: "#080810", border: "1px solid #12121e",
-                        borderLeft: `3px solid ${dirColor}`,
-                        borderRadius: 3, padding: "12px 16px",
-                        transition: "background 0.15s",
-                      }}
-                        onMouseEnter={e => e.currentTarget.style.background = "#0d0d1a"}
-                        onMouseLeave={e => e.currentTarget.style.background = "#080810"}>
+              {/* ── Layout principal ───────────────────────────── */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 12, alignItems: "start" }}>
 
-                        {/* Paire */}
-                        <div style={{ minWidth: 52 }}>
-                          <div style={{ fontSize: 16, fontWeight: "700", color: PAIR_COLORS[pair] || "#e2e8f0", fontFamily: MONO }}>{pair}</div>
-                          <div style={{ fontSize: 10, color: "#374151", fontFamily: MONO }}>{sig.timeframe || "1h"}</div>
+                {/* ── Opportunité du moment ──────────────────── */}
+                {best ? (() => {
+                  const isLong  = best.direction === "long";
+                  const dirClr  = isLong ? "#00c98d" : "#ff4d4d";
+                  const pct     = Math.round((best.confidence || 0) * 100);
+                  const pair    = (best.pair || "").replace("USDT", "");
+                  const minAgo  = best.created_at ? Math.round((Date.now() - new Date(best.created_at)) / 60000) : null;
+                  const timeStr = minAgo != null ? (minAgo < 60 ? `il y a ${minAgo} min` : `il y a ${Math.floor(minAgo/60)}h`) : "";
+                  const priceItem = overview.find(o => o.pair === pair) || {};
+                  return (
+                    <div style={{ background: "#07070e", border: `1px solid ${dirClr}22`, borderLeft: `3px solid ${dirClr}`, borderRadius: 3, padding: "24px 28px" }}>
+                      {/* Badge "en direct" */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: dirClr, display: "inline-block", boxShadow: `0 0 6px ${dirClr}` }} />
+                        <span style={{ fontSize: 9, fontWeight: "700", color: dirClr, letterSpacing: 2 }}>OPPORTUNITÉ EN COURS</span>
+                        {timeStr && <span style={{ fontSize: 10, color: "#374151", marginLeft: "auto", fontFamily: MONO }}>{timeStr}</span>}
+                      </div>
+
+                      {/* Paire + direction */}
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 16, marginBottom: 8 }}>
+                        <span style={{ fontSize: 42, fontWeight: "700", color: PAIR_COLORS[pair] || "#e2e8f0", fontFamily: MONO, lineHeight: 1 }}>{pair}</span>
+                        <span style={{ fontSize: 28, fontWeight: "700", color: dirClr, fontFamily: MONO }}>{isLong ? "▲ LONG" : "▼ SHORT"}</span>
+                      </div>
+
+                      {/* Prix actuel */}
+                      {priceItem.price && (
+                        <div style={{ fontSize: 14, color: "#4b5563", fontFamily: MONO, marginBottom: 20 }}>
+                          Prix actuel <span style={{ color: "#c9d1d9" }}>${parseFloat(priceItem.price).toLocaleString("en-US", { maximumFractionDigits: 2 })}</span>
+                          {priceItem.change && <span style={{ color: parseFloat(priceItem.change) >= 0 ? "#00c98d" : "#ff4d4d", marginLeft: 10 }}>{parseFloat(priceItem.change) >= 0 ? "+" : ""}{priceItem.change}% aujourd'hui</span>}
                         </div>
+                      )}
 
-                        {/* Direction — élément central */}
-                        <div style={{ minWidth: 90 }}>
-                          <div style={{ fontSize: 18, fontWeight: "700", color: dirColor, fontFamily: MONO, letterSpacing: 0.5 }}>
-                            {isLong ? "▲ LONG" : "▼ SHORT"}
-                          </div>
-                          {pct >= 80 && <div style={{ fontSize: 9, color: "#00c98d", fontWeight: "700", letterSpacing: 0.5, marginTop: 2 }}>● FORT</div>}
+                      {/* Confiance */}
+                      <div style={{ marginBottom: 20 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                          <span style={{ fontSize: 10, color: "#4b5563", fontWeight: "700", letterSpacing: 1 }}>CONFIANCE</span>
+                          <span style={{ fontSize: 13, fontWeight: "700", fontFamily: MONO, color: pct >= 75 ? "#00c98d" : pct >= 55 ? "#f59e0b" : "#ff4d4d" }}>{pct}%</span>
                         </div>
+                        <div style={{ height: 6, background: "#0d0d1a", borderRadius: 3, overflow: "hidden" }}>
+                          <div style={{ width: `${pct}%`, height: "100%", background: pct >= 75 ? "#00c98d" : pct >= 55 ? "#f59e0b" : "#ff4d4d", transition: "width 0.6s", borderRadius: 3 }} />
+                        </div>
+                        {pct >= 80 && <div style={{ fontSize: 10, color: "#00c98d", marginTop: 6, fontWeight: "700", letterSpacing: 0.5 }}>● Plusieurs indicateurs convergent — signal fort</div>}
+                      </div>
 
-                        {/* Confiance */}
-                        {pct != null && (
-                          <div style={{ flex: 1, maxWidth: 140 }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                              <span style={{ fontSize: 10, color: "#374151", fontWeight: "700" }}>CONFIANCE</span>
-                              <span style={{ fontSize: 12, fontWeight: "700", fontFamily: MONO, color: pct >= 70 ? "#00c98d" : pct >= 55 ? "#f59e0b" : "#ff4d4d" }}>{pct}%</span>
-                            </div>
-                            <div style={{ height: 4, background: "#0d0d1a", borderRadius: 2, overflow: "hidden" }}>
-                              <div style={{ width: `${pct}%`, height: "100%", background: pct >= 70 ? "#00c98d" : pct >= 55 ? "#f59e0b" : "#ff4d4d", transition: "width 0.4s" }} />
-                            </div>
-                          </div>
-                        )}
+                      {/* Explication */}
+                      <div style={{ background: "#050508", borderRadius: 3, padding: "14px 16px", marginBottom: 20, borderLeft: "2px solid #1f2937" }}>
+                        <div style={{ fontSize: 9, color: "#374151", fontWeight: "700", letterSpacing: 1, marginBottom: 8 }}>ANALYSE</div>
+                        <p style={{ fontSize: 13, color: "#9ca3af", lineHeight: 1.6, margin: 0 }}>
+                          {explainSignal(best)}
+                        </p>
+                      </div>
 
-                        {/* PnL si disponible */}
-                        {sig.pnl_pct != null && (
-                          <div style={{ minWidth: 60, textAlign: "right" }}>
-                            <div style={{ fontSize: 16, fontWeight: "700", fontFamily: MONO, color: sig.pnl_pct >= 0 ? "#00c98d" : "#ff4d4d" }}>
-                              {sig.pnl_pct >= 0 ? "+" : ""}{parseFloat(sig.pnl_pct).toFixed(1)}%
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Résultat */}
-                        <div style={{ minWidth: 70, textAlign: "right" }}>
-                          <span style={{
-                            display: "inline-block", padding: "4px 10px", borderRadius: 2, fontSize: 11, fontWeight: "700", letterSpacing: 0.5,
-                            background: isWin ? "#0d2818" : isLoss ? "#2a0f0f" : "#0d0d1a",
-                            color: isWin ? "#00c98d" : isLoss ? "#ff4d4d" : "#374151",
-                            border: `1px solid ${isWin ? "#00c98d22" : isLoss ? "#ff4d4d22" : "#1f1f35"}`,
-                          }}>
-                            {isWin ? "WIN" : isLoss ? "LOSS" : "EN COURS"}
-                          </span>
-                          {timeLabel && <div style={{ fontSize: 9, color: "#374151", marginTop: 4, fontFamily: MONO }}>{timeLabel}</div>}
+                      {/* Bouton action */}
+                      <div style={{ display: "flex", gap: 10 }}>
+                        <div style={{ flex: 1, padding: "12px 20px", background: dirClr + "18", border: `1px solid ${dirClr}44`, borderRadius: 3, textAlign: "center" }}>
+                          <div style={{ fontSize: 16, fontWeight: "700", color: dirClr, fontFamily: MONO }}>{isLong ? "▲ ENTRER LONG" : "▼ ENTRER SHORT"}</div>
+                          <div style={{ fontSize: 10, color: "#4b5563", marginTop: 4 }}>Décision personnelle — signal indicatif</div>
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  );
+                })() : null}
+
+                {/* ── Panneau droit ──────────────────────────── */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+
+                  {/* Sentiment marché */}
+                  <div style={{ background: "#07070e", border: "1px solid #0d0d1a", borderRadius: 3, padding: "16px 18px" }}>
+                    <div style={{ fontSize: 9, color: "#374151", fontWeight: "700", letterSpacing: 1, marginBottom: 12 }}>SENTIMENT MARCHÉ</div>
+                    <div style={{ fontSize: 22, fontWeight: "700", color: sentColor, fontFamily: MONO, marginBottom: 12 }}>{sentiment}</div>
+                    {fearGreed && (
+                      <div style={{ marginBottom: 12 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                          <span style={{ fontSize: 10, color: "#374151" }}>Fear & Greed</span>
+                          <span style={{ fontSize: 11, fontFamily: MONO, color: sentColor }}>{fearGreed.value} — {fearGreed.label}</span>
+                        </div>
+                        <div style={{ height: 4, background: "#0d0d1a", borderRadius: 2, overflow: "hidden" }}>
+                          <div style={{ width: `${fearGreed.value}%`, height: "100%", background: `linear-gradient(90deg, #ff4d4d, #f59e0b, #00c98d)`, borderRadius: 2 }} />
+                        </div>
+                      </div>
+                    )}
+                    {overview.slice(0,4).map(item => {
+                      const chg = parseFloat(item.change || 0);
+                      return (
+                        <div key={item.pair} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: "1px solid #0d0d1a" }}>
+                          <span style={{ fontSize: 12, fontWeight: "700", color: PAIR_COLORS[item.pair] || "#e2e8f0", fontFamily: MONO }}>{item.pair}</span>
+                          <span style={{ fontSize: 11, color: chg >= 0 ? "#00c98d" : "#ff4d4d", fontFamily: MONO }}>{chg >= 0 ? "+" : ""}{chg.toFixed(2)}%</span>
+                          <span style={{ fontSize: 10, color: chg >= 1 ? "#00c98d" : chg <= -1 ? "#ff4d4d" : "#4b5563" }}>{chg >= 1 ? "▲" : chg <= -1 ? "▼" : "→"}</span>
+                        </div>
+                      );
+                    })}
+                    {whales.length > 0 && (
+                      <div style={{ marginTop: 10, fontSize: 11, color: "#4b5563" }}>
+                        Whales : <span style={{ color: "#00c98d" }}>{whalesBullish} achats</span> · <span style={{ color: "#ff4d4d" }}>{whalesBearish} ventes</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Résultats récents */}
+                  <div style={{ background: "#07070e", border: "1px solid #0d0d1a", borderRadius: 3, padding: "16px 18px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                      <span style={{ fontSize: 9, color: "#374151", fontWeight: "700", letterSpacing: 1 }}>RÉSULTATS RÉCENTS</span>
+                      <span style={{ fontSize: 14, fontWeight: "700", fontFamily: MONO, color: wr >= 60 ? "#00c98d" : wr >= 45 ? "#f59e0b" : wr != null ? "#ff4d4d" : "#374151" }}>
+                        {wr != null ? `${wr}%` : "—"}
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
+                      {streak.length === 0
+                        ? <span style={{ fontSize: 11, color: "#374151" }}>Pas encore de résultats</span>
+                        : streak.map((s, i) => (
+                          <div key={i} style={{ width: 28, height: 28, borderRadius: 2, background: s.result === "win" ? "#0d2818" : "#2a0f0f", border: `1px solid ${s.result === "win" ? "#00c98d44" : "#ff4d4d44"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: "700", color: s.result === "win" ? "#00c98d" : "#ff4d4d" }}>
+                            {s.result === "win" ? "W" : "L"}
+                          </div>
+                        ))
+                      }
+                    </div>
+                    <div style={{ fontSize: 10, color: "#374151" }}>{wins} gagnés · {losses} perdus · {signals.length - done} en cours</div>
+                  </div>
+
+                  {/* File d'attente */}
+                  {queue.length > 0 && (
+                    <div style={{ background: "#07070e", border: "1px solid #0d0d1a", borderRadius: 3, padding: "16px 18px" }}>
+                      <div style={{ fontSize: 9, color: "#374151", fontWeight: "700", letterSpacing: 1, marginBottom: 10 }}>EN ATTENTE</div>
+                      {queue.map((sig, i) => {
+                        const isL = sig.direction === "long";
+                        const p   = (sig.pair || "").replace("USDT","");
+                        const pc  = Math.round((sig.confidence || 0) * 100);
+                        return (
+                          <div key={i} onClick={() => {}} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: "1px solid #0d0d1a", cursor: "pointer" }}>
+                            <span style={{ fontSize: 12, fontWeight: "700", color: PAIR_COLORS[p] || "#e2e8f0", fontFamily: MONO, minWidth: 36 }}>{p}</span>
+                            <span style={{ fontSize: 11, fontWeight: "700", color: isL ? "#00c98d" : "#ff4d4d", fontFamily: MONO }}>{isL ? "▲ L" : "▼ S"}</span>
+                            <div style={{ flex: 1, height: 3, background: "#0d0d1a", borderRadius: 1, overflow: "hidden" }}>
+                              <div style={{ width: `${pc}%`, height: "100%", background: isL ? "#00c98d" : "#ff4d4d" }} />
+                            </div>
+                            <span style={{ fontSize: 10, color: "#4b5563", fontFamily: MONO }}>{pc}%</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
             );
           })()}
