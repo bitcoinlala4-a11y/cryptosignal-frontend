@@ -385,66 +385,115 @@ export default function Dashboard() {
       <Head><title>Dashboard — CryptoSignal Pro</title></Head>
       <div style={s.page} className="dash-page">
 
-        {/* Header */}
-        <div style={s.header} className="dash-header">
-          {/* Logo + Plan */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-            <span style={s.logo}>CS<span style={{ color: "#7c3aed" }}>·</span>PRO</span>
-            <span style={{ ...s.planBadge, background: userPlan === "free" ? "#0a0a14" : userPlan === "pro" ? "#130d25" : "#120d00", color: userPlan === "free" ? "#4b5563" : userPlan === "pro" ? "#a78bfa" : "#f59e0b", border: `1px solid ${userPlan === "free" ? "#1e1e30" : userPlan === "pro" ? "#7c3aed44" : "#f59e0b44"}` }}>
-              {userPlan === "free" ? "FREE" : userPlan === "pro" ? "PRO" : "ELITE"}
-            </span>
+        {/* ── Top Bar ──────────────────────────────────────────────── */}
+        <div style={s.topBar}>
+          <div style={{ display: "flex", gap: 18, flex: 1, overflow: "hidden", alignItems: "center" }}>
+            {overview.slice(0,4).map(item => {
+              const chg = parseFloat(item.change || 0);
+              const clr = chg >= 0 ? "#00c98d" : "#ff4d4d";
+              return (
+                <div key={item.pair} style={{ display: "flex", gap: 6, alignItems: "baseline" }}>
+                  <span style={{ color: PAIR_COLORS[item.pair] || "#9ca3af", fontSize: 11, fontWeight: "700", fontFamily: MONO }}>{item.pair}</span>
+                  <span style={{ fontFamily: MONO, fontSize: 12, color: "#e2e8f0" }}>
+                    ${parseFloat(item.price || 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}
+                  </span>
+                  <span style={{ fontSize: 11, color: clr, fontFamily: MONO }}>{chg >= 0 ? "+" : ""}{item.change}%</span>
+                </div>
+              );
+            })}
           </div>
-
-          {/* Live price ticker */}
-          {overview.length > 0 && (
-            <div style={{ display: "flex", gap: 20, flex: 1, justifyContent: "center", overflow: "hidden" }}>
-              {overview.slice(0,4).map(item => {
-                const chg = parseFloat(item.change || 0);
-                const clr = chg >= 0 ? "#00c98d" : "#ff4d4d";
-                return (
-                  <div key={item.pair} style={{ display: "flex", gap: 7, alignItems: "baseline" }}>
-                    <span style={{ color: PAIR_COLORS[item.pair] || "#9ca3af", fontSize: 11, fontWeight: "700", fontFamily: MONO }}>{item.pair}</span>
-                    <span style={{ fontFamily: MONO, fontSize: 12, color: "#e2e8f0", fontWeight: "500" }}>
-                      ${parseFloat(item.price || 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}
-                    </span>
-                    <span style={{ fontSize: 11, color: clr, fontFamily: MONO }}>{chg >= 0 ? "+" : ""}{item.change}%</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Actions */}
-          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {userPlan !== "elite" && <button style={s.upgradeBtn} onClick={() => router.push("/pricing")}>UPGRADE</button>}
-            <button style={s.logoutBtn} onClick={logout}>LOGOUT</button>
           </div>
         </div>
 
-        {/* ── News Ticker ─────────────────────────────────────────────── */}
-        {news.length > 0 && (
-          <div style={{ background: "#060609", borderBottom: "1px solid #0d0d1a", overflow: "hidden", height: 26, display: "flex", alignItems: "center" }}>
-            <div style={{ padding: "0 12px", background: "#7c3aed", color: "#fff", fontSize: 9, fontWeight: "700", height: "100%", display: "flex", alignItems: "center", letterSpacing: 1.5, whiteSpace: "nowrap", flexShrink: 0 }}>
-              NEWS
-            </div>
-            <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
-              <div className="news-ticker-inner">
-                {[...news, ...news].map((item, i) => (
-                  <a key={i} href={item.url} target="_blank" rel="noopener noreferrer"
-                    style={{ color: "#6b7280", textDecoration: "none", fontSize: 11, whiteSpace: "nowrap", transition: "color 0.15s" }}
-                    onMouseEnter={e => e.currentTarget.style.color="#c9d1d9"}
-                    onMouseLeave={e => e.currentTarget.style.color="#6b7280"}>
-                    <span style={{ color: "#7c3aed", marginRight: 8, fontSize: 9 }}>▸</span>
-                    {item.title}
-                    <span style={{ color: "#1f2937", marginLeft: 10, marginRight: 20, fontSize: 10, fontFamily: MONO }}>— {item.source}</span>
-                  </a>
-                ))}
-              </div>
+        {/* ── Body: Sidebar + Main ─────────────────────────────────── */}
+        <div style={{ display: "flex", height: "calc(100vh - 40px)", overflow: "hidden" }}>
+
+        {/* ── Sidebar ──────────────────────────────────────────────── */}
+        <div style={s.sidebar}>
+          <div style={{ padding: "18px 16px 14px", borderBottom: "1px solid #0d0d1a" }}>
+            <div style={s.logo}>CS<span style={{ color: "#7c3aed" }}>·</span>PRO</div>
+            <div style={{ marginTop: 8 }}>
+              <span style={{ ...s.planBadge, background: userPlan === "free" ? "#0a0a14" : userPlan === "pro" ? "#130d25" : "#120d00", color: userPlan === "free" ? "#4b5563" : userPlan === "pro" ? "#a78bfa" : "#f59e0b", border: `1px solid ${userPlan === "free" ? "#1e1e30" : userPlan === "pro" ? "#7c3aed44" : "#f59e0b44"}` }}>
+                {userPlan === "free" ? "FREE" : userPlan === "pro" ? "PRO" : "ELITE"}
+              </span>
             </div>
           </div>
-        )}
+          <nav style={{ flex: 1, padding: "10px 0", overflowY: "auto" }}>
+            {[
+              { id: "overview",   icon: "◈", label: "Overview" },
+              { id: "signals",    icon: "⚡", label: "Signals", badge: signals.length > 0 ? signals.length : null },
+              ...(userPlan !== "free" ? [{ id: "matrix", icon: "◉", label: "Matrix" }] : []),
+              ...(userPlan === "elite" ? [{ id: "pancake", icon: "⬡", label: "PancakeSwap" }] : []),
+              { id: "polymarket", icon: "🎯", label: "Polymarket", badge: polyGaps.length > 0 ? polyGaps.length : null },
+              { id: "lab",        icon: "⚗", label: "Lab", dot: botStatus === "running" },
+              { id: "profil",     icon: "◎", label: "Profile" },
+            ].map(item => {
+              const active = activeTab === item.id;
+              return (
+                <button key={item.id} onClick={() => setActiveTab(item.id)} style={{
+                  display: "flex", alignItems: "center", gap: 10, width: "100%",
+                  padding: "10px 16px", border: "none",
+                  borderLeft: `2px solid ${active ? "#7c3aed" : "transparent"}`,
+                  color: active ? "#e2e8f0" : "#4b5563",
+                  cursor: "pointer", fontSize: 12, fontWeight: active ? "700" : "500",
+                  textAlign: "left", background: active ? "#0a0a14" : "transparent",
+                }}>
+                  <span style={{ fontSize: 13, width: 16, textAlign: "center" }}>{item.icon}</span>
+                  <span style={{ flex: 1, letterSpacing: 0.3 }}>{item.label}</span>
+                  {item.badge && (
+                    <span style={{ background: "#13132a", color: "#a78bfa", borderRadius: 10, padding: "1px 6px", fontSize: 10, fontFamily: MONO }}>
+                      {item.badge}
+                    </span>
+                  )}
+                  {item.dot && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#00c98d", flexShrink: 0 }} />}
+                </button>
+              );
+            })}
+          </nav>
+          <div style={{ padding: "12px 16px", borderTop: "1px solid #0d0d1a" }}>
+            <button style={{ width: "100%", padding: "7px 0", background: "none", border: "1px solid #1a1a2e", borderRadius: 2, color: "#4b5563", cursor: "pointer", fontSize: 11, letterSpacing: 0.5 }} onClick={logout}>LOGOUT</button>
+          </div>
+        </div>
 
-        <div style={s.content}>
+        {/* ── Main ────────────────────────────────────────────────── */}
+        <div style={s.main}>
+          {/* News Ticker */}
+          {news.length > 0 && (
+            <div style={{ background: "#060609", borderBottom: "1px solid #0d0d1a", overflow: "hidden", height: 26, display: "flex", alignItems: "center", flexShrink: 0 }}>
+              <div style={{ padding: "0 12px", background: "#7c3aed", color: "#fff", fontSize: 9, fontWeight: "700", height: "100%", display: "flex", alignItems: "center", letterSpacing: 1.5, whiteSpace: "nowrap", flexShrink: 0 }}>NEWS</div>
+              <div style={{ flex: 1, overflow: "hidden" }}>
+                <div className="news-ticker-inner">
+                  {[...news, ...news].map((nitem, i) => (
+                    <a key={i} href={nitem.url} target="_blank" rel="noopener noreferrer"
+                      style={{ color: "#6b7280", textDecoration: "none", fontSize: 11, whiteSpace: "nowrap" }}
+                      onMouseEnter={e => e.currentTarget.style.color="#c9d1d9"}
+                      onMouseLeave={e => e.currentTarget.style.color="#6b7280"}>
+                      <span style={{ color: "#7c3aed", marginRight: 8, fontSize: 9 }}>▸</span>
+                      {nitem.title}
+                      <span style={{ color: "#1f2937", marginLeft: 10, marginRight: 20, fontSize: 10, fontFamily: MONO }}>— {nitem.source}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Section title bar */}
+          <div style={s.sectionHead}>
+            <span style={s.sectionTitle}>
+              {{ overview: "Overview", signals: `Signals · ${signals.length}`, matrix: "Matrix", pancake: "PancakeSwap", polymarket: "Polymarket", lab: "Trading Lab", profil: "Profile" }[activeTab] || ""}
+            </span>
+            {activeTab === "lab" && botStatus === "running" && <span style={{ fontSize: 10, color: "#00c98d" }}>● ACTIF</span>}
+            {activeTab === "lab" && <span style={{ color: "#374151", fontSize: 11, fontFamily: MONO, marginLeft: "auto" }}>${Math.round(labBalance)}</span>}
+          </div>
+
+          <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+
+          {/* ── Overview ─────────────────────────────────────────────── */}
+          {activeTab === "overview" && (
+          <div>
 
           {/* Signal du jour */}
           {signalOfDay && (
@@ -469,7 +518,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Paires overview */}
+          {/* Paires */}
           <div style={s.topRow} className="dash-toprow">
             <div style={s.pairsGrid} className="dash-pairs-grid">
               {overview.map(item => {
@@ -481,9 +530,7 @@ export default function Dashboard() {
                   <div key={item.pair} style={s.pairCard}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
                       <span style={{ fontWeight: "700", color: PAIR_COLORS[item.pair] || "#fff", fontSize: 12, fontFamily: MONO, letterSpacing: 0.5 }}>{item.pair}</span>
-                      <span style={{ fontSize: 11, fontWeight: "700", color: clr, fontFamily: MONO }}>
-                        {chg >= 0 ? "+" : ""}{item.change}%
-                      </span>
+                      <span style={{ fontSize: 11, fontWeight: "700", color: clr, fontFamily: MONO }}>{chg >= 0 ? "+" : ""}{item.change}%</span>
                     </div>
                     <div style={{ fontSize: 17, fontWeight: "700", color: "#e2e8f0", marginBottom: 6, fontFamily: MONO, letterSpacing: -0.5 }}>
                       ${parseFloat(item.price).toLocaleString("en-US", { maximumFractionDigits: 2 })}
@@ -541,41 +588,12 @@ export default function Dashboard() {
                 </div>
               </>
             )}
-            {botStats && (botStats.total_bets || 0) > 0 && (
-              <>
-                <div style={s.statDivider} />
-                <div style={s.statItem}>
-                  <span style={{ color: "#374151", fontSize: 9, fontWeight: "700", letterSpacing: 1 }}>LAB BALANCE</span>
-                  <span style={{ color: labBalance >= 1000 ? "#00c98d" : labBalance >= 400 ? "#f59e0b" : "#ff4d4d", fontWeight: "700", fontSize: 18, fontFamily: MONO }}>${Math.round(labBalance)}</span>
-                </div>
-              </>
-            )}
           </div>
 
-          {/* 4 graphiques */}
+          {/* Graphiques */}
           <AllCharts />
 
-          {/* Panel onglets */}
-          <div style={s.panel} className="dash-panel">
-            <div style={s.tabBar} className="dash-tabbar">
-              {[
-                { id: "overview", label: "Overview" },
-                { id: "signals", label: `Signals (${signals.length})` },
-                ...(userPlan !== "free" ? [{ id: "matrix", label: "Matrix" }] : []),
-                ...(userPlan === "elite" ? [{ id: "pancake", label: "PancakeSwap" }] : []),
-                { id: "polymarket", label: `Polymarket${polyGaps.length > 0 ? ` (${polyGaps.length})` : ""}` },
-                { id: "lab", label: `Lab ${botStatus === "running" ? "●" : `$${Math.round(labBalance)}`}` },
-                { id: "profil", label: "Profil" },
-              ].map(tab => (
-                <button key={tab.id} style={activeTab === tab.id ? s.tabActive : s.tab} onClick={() => setActiveTab(tab.id)}>
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Vue d'ensemble */}
-            {activeTab === "overview" && (
-              <div>
+          <div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16, alignItems: "stretch" }}>
                   {["rsi", "ema", "momentum", "macd"].map(type => {
                     const rows = (signalStats?.byType || []).filter(r => r.type === type);
@@ -696,10 +714,10 @@ export default function Dashboard() {
                   </div>
                 </div>
               </div>
-            )}
+          </div>)}
 
-            {/* Signaux */}
-            {activeTab === "signals" && (
+          {/* Signaux */}
+          {activeTab === "signals" && (
               <div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16, alignItems: "center" }}>
                   {allowedTimeframes.map(tf => (
@@ -1833,6 +1851,7 @@ export default function Dashboard() {
 
           </div>
         </div>
+        </div>
       </div>
     </>
   );
@@ -1840,13 +1859,16 @@ export default function Dashboard() {
 
 const MONO = "'JetBrains Mono','Fira Code','Courier New',monospace";
 const s = {
-  page: { minHeight: "100vh", background: "#050507", fontFamily: "'Inter', system-ui, sans-serif", color: "#c9d1d9" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 20px", height: 44, borderBottom: "1px solid #0d0d1a", background: "#07070e", position: "sticky", top: 0, zIndex: 100, gap: 12 },
+  page: { height: "100vh", display: "flex", flexDirection: "column", background: "#050507", fontFamily: "'Inter', system-ui, sans-serif", color: "#c9d1d9", overflow: "hidden" },
+  topBar: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 20px", height: 40, borderBottom: "1px solid #0d0d1a", background: "#07070e", flexShrink: 0, gap: 12 },
+  sidebar: { width: 176, flexShrink: 0, background: "#030305", borderRight: "1px solid #0d0d1a", display: "flex", flexDirection: "column", overflowY: "auto" },
+  main: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: "#050507" },
+  sectionHead: { display: "flex", alignItems: "center", gap: 10, padding: "8px 20px", borderBottom: "1px solid #0d0d1a", background: "#07070e", flexShrink: 0, minHeight: 36 },
+  sectionTitle: { fontSize: 10, fontWeight: "700", color: "#a78bfa", letterSpacing: 1.5, textTransform: "uppercase" },
   logo: { fontSize: 14, fontWeight: "bold", color: "#e2e8f0", fontFamily: MONO, letterSpacing: 2 },
   planBadge: { padding: "2px 7px", borderRadius: 2, fontSize: 10, fontWeight: "bold", letterSpacing: 1 },
   upgradeBtn: { padding: "5px 12px", background: "#7c3aed", border: "none", borderRadius: 2, color: "#fff", fontWeight: "bold", cursor: "pointer", fontSize: 11, letterSpacing: 0.5 },
   logoutBtn: { padding: "5px 10px", background: "none", border: "1px solid #1a1a2e", borderRadius: 2, color: "#4b5563", cursor: "pointer", fontSize: 11 },
-  content: { padding: "14px 20px", maxWidth: 1440, margin: "0 auto" },
   sodBanner: { background: "#080810", borderRadius: 3, padding: "10px 14px", marginBottom: 10, border: "1px solid #12121e", borderLeft: "3px solid #7c3aed" },
   topRow: { display: "flex", gap: 10, marginBottom: 10, alignItems: "flex-start" },
   fgBox: { background: "#080810", borderRadius: 3, padding: "12px 14px", border: "1px solid #12121e", minWidth: 140 },
